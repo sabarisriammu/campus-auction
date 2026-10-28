@@ -9,9 +9,11 @@ import {
   UserIcon,
   ArrowRightIcon,
   TagIcon,
+  BookmarkIcon,
+  RotateCcwIcon,
 } from "./Icons";
 
-export default function ListingCard({ listing, onSelect, isOwner }) {
+export default function ListingCard({ listing, onSelect, isOwner, isSaved = false, onToggleWatchlist }) {
   const {
     _id,
     title,
@@ -26,6 +28,7 @@ export default function ListingCard({ listing, onSelect, isOwner }) {
     status,
     outcome,
     imageUrl,
+    isRelisted,
   } = listing;
 
   const displayPrice =
@@ -97,6 +100,12 @@ export default function ListingCard({ listing, onSelect, isOwner }) {
           )}
           {isUnsold && <span className="badge badge-unsold">Unsold</span>}
           {isCancelled && <span className="badge badge-cancelled">Cancelled</span>}
+          {isRelisted && (
+            <span className="badge badge-relisted">
+              <RotateCcwIcon size={11} />
+              <span>Relisted</span>
+            </span>
+          )}
           {!isCompleted && !isCancelled && countdown.isEnded && (
             <span className="badge badge-ended">Ended</span>
           )}
@@ -107,6 +116,22 @@ export default function ListingCard({ listing, onSelect, isOwner }) {
             </span>
           )}
         </div>
+
+        {/* Watchlist Bookmark Button */}
+        {onToggleWatchlist && (
+          <button
+            type="button"
+            className={`card-bookmark-btn ${isSaved ? "saved" : ""}`}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleWatchlist(_id);
+            }}
+            title={isSaved ? "Remove from Watchlist" : "Save to Watchlist"}
+            aria-label="Toggle Watchlist"
+          >
+            <BookmarkIcon size={16} filled={isSaved} />
+          </button>
+        )}
 
         {/* Category Pill Tag */}
         <div className="media-overlay-category">

@@ -42,6 +42,7 @@ async function createNotification({
   bid = null,
   transaction = null,
   deduplicate = false,
+  threshold = null,
 }) {
   try {
     if (!recipient) return null;
@@ -51,11 +52,15 @@ async function createNotification({
 
     // Optional deduplication guard for idempotent auction lifecycle runs
     if (deduplicate && listing) {
-      const existing = await Notification.findOne({
+      const existingQuery = {
         recipient: recipientId,
         type,
         listing,
-      });
+      };
+      if (threshold) {
+        existingQuery.threshold = threshold;
+      }
+      const existing = await Notification.findOne(existingQuery);
       if (existing) return existing;
     }
 
@@ -67,6 +72,7 @@ async function createNotification({
       listing: listing || null,
       bid: bid || null,
       transaction: transaction || null,
+      threshold: threshold || null,
       isRead: false,
     });
 

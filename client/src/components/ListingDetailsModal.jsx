@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 import { formatCurrency } from "../utils/formatters";
 import { useCountdown } from "../hooks/useCountdown";
+import RelistModal from "./RelistModal";
 import {
   XIcon,
   ClockIcon,
@@ -16,6 +17,8 @@ import {
   BanIcon,
   CheckCircleIcon,
   UserIcon,
+  BookmarkIcon,
+  RotateCcwIcon,
 } from "./Icons";
 
 export default function ListingDetailsModal({
@@ -29,8 +32,12 @@ export default function ListingDetailsModal({
   onBidSuccess,
   onOpenAuth,
   onOpenTransactions,
+  isSaved = false,
+  onToggleWatchlist,
+  onRelistSuccess,
 }) {
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
+  const [showRelistModal, setShowRelistModal] = useState(false);
   const [bids, setBids] = useState([]);
   const [loadingBids, setLoadingBids] = useState(true);
   const [bidAmount, setBidAmount] = useState("");
@@ -82,6 +89,7 @@ export default function ListingDetailsModal({
     imageUrl,
     completionTime,
     createdAt,
+    isRelisted,
   } = currentListing;
 
   const isCancelled = status === "cancelled";
@@ -217,12 +225,38 @@ export default function ListingDetailsModal({
             <span className="listing-category-pill">{category}</span>
             <h2 className="modal-title">{title}</h2>
           </div>
-          <button className="btn-close" onClick={onClose} aria-label="Close modal">
-            <XIcon size={18} />
-          </button>
+          <div className="flex items-center gap-2">
+            {onToggleWatchlist && (
+              <button
+                type="button"
+                className={`btn btn-sm ${isSaved ? "btn-primary" : "btn-outline"}`}
+                onClick={() => onToggleWatchlist(_id)}
+                title={isSaved ? "Remove from Watchlist" : "Save to Watchlist"}
+              >
+                <BookmarkIcon size={14} filled={isSaved} />
+                <span>{isSaved ? "Saved" : "Save"}</span>
+              </button>
+            )}
+            <button className="btn-close" onClick={onClose} aria-label="Close modal">
+              <XIcon size={18} />
+            </button>
+          </div>
         </div>
 
         <div className="modal-body">
+          {/* Relisted lineage badge */}
+          {isRelisted && (
+            <div className="alert alert-info mb-4">
+              <div className="flex items-center gap-2">
+                <RotateCcwIcon size={15} />
+                <strong>Relisted Item</strong>
+              </div>
+              <p className="text-sm mt-1 mb-0">
+                This item is an active relisting of a previous auction listing.
+              </p>
+            </div>
+          )}
+
           {/* Lifecycle Status Banners */}
           {isSold && (
             <div className="alert alert-success mb-4 outcome-banner">
@@ -696,6 +730,22 @@ export default function ListingDetailsModal({
                     )}
                   </div>
                 )}
+
+                {/* Relist Action for Concluded or Cancelled items (Owner or Admin) */}
+                {canManage && (isCompleted || isCancelled) && (
+                  <div className="owner-actions-box mt-3">
+                    <div className="owner-header">
+                      <span>{isAdmin ? "🛡️ Admin Operations" : "⚙️ Seller Operations"}</span>
+                    </div>
+                    <button
+                      className="btn btn-outline btn-block"
+                      onClick={() => setShowRelistModal(true)}
+                    >
+                      <RotateCcwIcon size={14} />
+                      <span>Relist This Item for Auction</span>
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -706,6 +756,22 @@ export default function ListingDetailsModal({
             Back to Marketplace
           </button>
         </div>
+
+        {/* Relist Modal */}
+        {showRelistModal && (
+          <RelistModal
+            listing={currentListing}
+            isOpen={showRelistModal}
+            onClose={() => setShowRelistModal(false)}
+            token={token}
+            onSuccess={(newListing, msg) => {
+              setShowRelistModal(false);
+              if (onRelistSuccess) {
+                onRelistSuccess(newListing, msg);
+              }
+            }}
+          />
+        )}
       </div>
     </div>
   );

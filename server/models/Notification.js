@@ -12,6 +12,13 @@ const NOTIFICATION_TYPES = [
   "HANDOVER_COMPLETED",
   "HANDOVER_DISPUTED",
   "HANDOVER_RESOLVED",
+  "HANDOVER_CANCELLED",
+  "HANDOVER_FAILED",
+  "SECOND_CHANCE_OFFER",
+  "SECOND_CHANCE_ACCEPTED",
+  "SECOND_CHANCE_DECLINED",
+  "AUCTION_RELISTED",
+  "AUCTION_REMINDER",
 ];
 
 const notificationSchema = new mongoose.Schema(
@@ -59,6 +66,12 @@ const notificationSchema = new mongoose.Schema(
       ref: "Transaction",
       default: null,
     },
+    // Threshold identifier for auction reminders (e.g., "15m", "5m")
+    threshold: {
+      type: String,
+      enum: ["15m", "5m", null],
+      default: null,
+    },
     isRead: {
       type: Boolean,
       default: false,
@@ -74,9 +87,10 @@ const notificationSchema = new mongoose.Schema(
   }
 );
 
-// High-performance compound indexes for user feed & badge counts
+// High-performance compound indexes for user feed, badge counts & reminder idempotency
 notificationSchema.index({ recipient: 1, createdAt: -1 });
 notificationSchema.index({ recipient: 1, isRead: 1, createdAt: -1 });
+notificationSchema.index({ recipient: 1, type: 1, listing: 1, threshold: 1 });
 
 module.exports = mongoose.model("Notification", notificationSchema);
 module.exports.NOTIFICATION_TYPES = NOTIFICATION_TYPES;

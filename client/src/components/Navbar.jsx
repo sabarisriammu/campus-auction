@@ -1,6 +1,6 @@
 import React from "react";
 import NotificationDropdown from "./NotificationDropdown";
-import { GavelIcon, HandshakeIcon, PlusIcon, UserIcon, ShieldCheckIcon } from "./Icons";
+import { GavelIcon, HandshakeIcon, PlusIcon, UserIcon, ShieldCheckIcon, BookmarkIcon } from "./Icons";
 
 export default function Navbar({
   user,
@@ -17,6 +17,7 @@ export default function Navbar({
   loadingNotifications,
   fetchNotifications,
   onNavigate,
+  watchlistCount = 0,
 }) {
   const getRoleBadge = (role) => {
     switch (role) {
@@ -80,6 +81,18 @@ export default function Navbar({
             >
               <HandshakeIcon size={16} className="nav-link-icon" />
               <span>My Handover</span>
+            </button>
+          )}
+
+          {user && (
+            <button
+              className={`nav-link ${activeTab === "watchlist" ? "active" : ""}`}
+              onClick={() => setActiveTab("watchlist")}
+              title="My Watchlist / Saved Products"
+            >
+              <BookmarkIcon size={16} className="nav-link-icon" filled={activeTab === "watchlist"} />
+              <span>Saved</span>
+              {watchlistCount > 0 && <span className="nav-badge font-mono">{watchlistCount}</span>}
             </button>
           )}
 

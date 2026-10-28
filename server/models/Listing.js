@@ -81,7 +81,7 @@ const listingSchema = new mongoose.Schema(
       required: [true, "Seller is required."],
     },
 
-    // Lifecycle Outcome Fields (Module 6)
+    // Lifecycle Outcome Fields
     winner: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
@@ -104,11 +104,29 @@ const listingSchema = new mongoose.Schema(
       default: null,
     },
 
-    // Product Image URL (Module 6)
+    // Product Image URL
     imageUrl: {
       type: String,
       default: null,
       trim: true,
+    },
+
+    // Relisting lineage references (Part 3)
+    relistedFrom: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Listing",
+      default: null,
+    },
+
+    relistedTo: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Listing",
+      default: null,
+    },
+
+    isRelisted: {
+      type: Boolean,
+      default: false,
     },
   },
   {
@@ -119,5 +137,6 @@ const listingSchema = new mongoose.Schema(
 listingSchema.index({ status: 1, auctionEndTime: 1 });
 listingSchema.index({ seller: 1 });
 listingSchema.index({ winner: 1 });
+listingSchema.index({ relistedFrom: 1 });
 
 module.exports = mongoose.model("Listing", listingSchema);

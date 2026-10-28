@@ -4,6 +4,23 @@ const Listing = require("../models/Listing");
 const notificationService = require("./notificationService");
 
 /**
+ * Helper to record persistent audit entry into transaction history
+ */
+function recordHistory(transaction, action, userId, previousStatus, newStatus, notes = null) {
+  if (!transaction.history) {
+    transaction.history = [];
+  }
+  transaction.history.push({
+    action,
+    performedBy: userId || null,
+    timestamp: new Date(),
+    previousStatus: previousStatus || transaction.status,
+    newStatus: newStatus || transaction.status,
+    notes: notes ? String(notes).trim() : null,
+  });
+}
+
+/**
  * Ensures a Transaction record exists for a completed, sold listing.
  * Guarantees that only sold listings with a valid winner can have a transaction.
  * @param {string|mongoose.Types.ObjectId} listingId
@@ -14,11 +31,29 @@ async function getOrCreateTransactionForListing(listingId) {
     return null;
   }
 
-  let transaction = await Transaction.findOne({ listing: listingId })
+  // Find active (non-cancelled, non-failed) transaction first, or most recent
+  let transaction = await Transaction.findOne({
+    listing: listingId,
+    status: { $in: ["PENDING", "HANDOVER_IN_PROGRESS", "COMPLETED", "DISPUTED"] },
+  })
     .populate("listing")
     .populate("seller", "name email role")
     .populate("buyer", "name email role")
-    .populate("disputedBy", "name email role");
+    .populate("disputedBy", "name email role")
+    .populate("outcomeInitiatedBy", "name email role");
+
+  if (transaction) {
+    return transaction;
+  }
+
+  // Check if any terminal transaction exists
+  transaction = await Transaction.findOne({ listing: listingId })
+    .sort({ createdAt: -1 })
+    .populate("listing")
+    .populate("seller", "name email role")
+    .populate("buyer", "name email role")
+    .populate("disputedBy", "name email role")
+    .populate("outcomeInitiatedBy", "name email role");
 
   if (transaction) {
     return transaction;
@@ -34,32 +69,38 @@ async function getOrCreateTransactionForListing(listingId) {
   }
 
   try {
-    transaction = await Transaction.findOneAndUpdate(
-      { listing: listing._id },
-      {
-        $setOnInsert: {
-          listing: listing._id,
-          seller: listing.seller,
-          buyer: listing.winner,
-          finalPrice: listing.finalPrice || listing.currentPrice,
-          status: "PENDING",
+    const createdTx = await Transaction.create({
+      listing: listing._id,
+      seller: listing.seller,
+      buyer: listing.winner,
+      finalPrice: listing.finalPrice || listing.currentPrice,
+      status: "PENDING",
+      history: [
+        {
+          action: "CREATED",
+          performedBy: listing.seller,
+          timestamp: new Date(),
+          previousStatus: null,
+          newStatus: "PENDING",
+          notes: "Handover record initialized upon auction completion.",
         },
-      },
-      { upsert: true, new: true }
-    )
-      .populate("listing")
-      .populate("seller", "name email role")
-      .populate("buyer", "name email role")
-      .populate("disputedBy", "name email role");
+      ],
+    });
 
-    return transaction;
-  } catch (err) {
-    // If concurrent insert occurred, retrieve the existing transaction
-    return await Transaction.findOne({ listing: listing._id })
+    return await Transaction.findById(createdTx._id)
       .populate("listing")
       .populate("seller", "name email role")
       .populate("buyer", "name email role")
-      .populate("disputedBy", "name email role");
+      .populate("disputedBy", "name email role")
+      .populate("outcomeInitiatedBy", "name email role");
+  } catch (err) {
+    return await Transaction.findOne({ listing: listing._id })
+      .sort({ createdAt: -1 })
+      .populate("listing")
+      .populate("seller", "name email role")
+      .populate("buyer", "name email role")
+      .populate("disputedBy", "name email role")
+      .populate("outcomeInitiatedBy", "name email role");
   }
 }
 
@@ -78,7 +119,7 @@ async function getUserTransactions(user, statusFilter = null) {
     query.$or = [{ seller: user.id }, { buyer: user.id }];
   }
 
-  if (statusFilter && ["PENDING", "HANDOVER_IN_PROGRESS", "COMPLETED", "DISPUTED"].includes(statusFilter)) {
+  if (statusFilter && Transaction.schema.path("status").enumValues.includes(statusFilter)) {
     query.status = statusFilter;
   }
 
@@ -87,7 +128,9 @@ async function getUserTransactions(user, statusFilter = null) {
     .populate("listing")
     .populate("seller", "name email role")
     .populate("buyer", "name email role")
-    .populate("disputedBy", "name email role");
+    .populate("disputedBy", "name email role")
+    .populate("outcomeInitiatedBy", "name email role")
+    .populate("history.performedBy", "name role");
 }
 
 /**
@@ -107,7 +150,9 @@ async function getTransactionById(transactionId, user) {
     .populate("listing")
     .populate("seller", "name email role")
     .populate("buyer", "name email role")
-    .populate("disputedBy", "name email role");
+    .populate("disputedBy", "name email role")
+    .populate("outcomeInitiatedBy", "name email role")
+    .populate("history.performedBy", "name role");
 
   if (!transaction) {
     const err = new Error("Transaction not found.");
@@ -138,8 +183,8 @@ async function getTransactionById(transactionId, user) {
 async function startHandover(transactionId, user, { handoverLocation, handoverNotes }) {
   const transaction = await getTransactionById(transactionId, user);
 
-  if (transaction.status === "COMPLETED") {
-    const err = new Error("Cannot update handover for an already completed transaction.");
+  if (["COMPLETED", "CANCELLED", "FAILED"].includes(transaction.status)) {
+    const err = new Error(`Cannot update handover for a ${transaction.status.toLowerCase()} transaction.`);
     err.status = 400;
     throw err;
   }
@@ -149,6 +194,8 @@ async function startHandover(transactionId, user, { handoverLocation, handoverNo
     err.status = 400;
     throw err;
   }
+
+  const previousStatus = transaction.status;
 
   if (handoverLocation !== undefined) {
     transaction.handoverLocation = handoverLocation ? String(handoverLocation).trim() : null;
@@ -161,6 +208,15 @@ async function startHandover(transactionId, user, { handoverLocation, handoverNo
     transaction.status = "HANDOVER_IN_PROGRESS";
     transaction.handoverStartedAt = new Date();
   }
+
+  recordHistory(
+    transaction,
+    "COORDINATION_UPDATED",
+    user.id,
+    previousStatus,
+    transaction.status,
+    `Location: ${transaction.handoverLocation || "None"}. Notes: ${transaction.handoverNotes || "None"}`
+  );
 
   await transaction.save();
 
@@ -203,8 +259,13 @@ async function confirmSellerHandover(transactionId, user) {
   }
 
   if (transaction.status === "COMPLETED") {
-    // Idempotent: return transaction as-is
     return transaction;
+  }
+
+  if (["CANCELLED", "FAILED"].includes(transaction.status)) {
+    const err = new Error(`Cannot confirm handover on a ${transaction.status.toLowerCase()} transaction.`);
+    err.status = 400;
+    throw err;
   }
 
   if (transaction.status === "DISPUTED") {
@@ -213,10 +274,12 @@ async function confirmSellerHandover(transactionId, user) {
     throw err;
   }
 
+  const previousStatus = transaction.status;
   transaction.sellerConfirmed = true;
   transaction.sellerConfirmedAt = new Date();
 
-  // If currently pending, transition to in progress
+  recordHistory(transaction, "SELLER_CONFIRMED", user.id, previousStatus, transaction.status, "Seller confirmed physical handover.");
+
   if (transaction.status === "PENDING") {
     transaction.status = "HANDOVER_IN_PROGRESS";
     if (!transaction.handoverStartedAt) {
@@ -229,6 +292,7 @@ async function confirmSellerHandover(transactionId, user) {
   if (wasCompleted) {
     transaction.status = "COMPLETED";
     transaction.completedAt = new Date();
+    recordHistory(transaction, "COMPLETED", user.id, previousStatus, "COMPLETED", "Both parties verified handover. Transaction completed.");
   }
 
   await transaction.save();
@@ -294,8 +358,13 @@ async function confirmBuyerReceipt(transactionId, user) {
   }
 
   if (transaction.status === "COMPLETED") {
-    // Idempotent: return transaction as-is
     return transaction;
+  }
+
+  if (["CANCELLED", "FAILED"].includes(transaction.status)) {
+    const err = new Error(`Cannot confirm receipt on a ${transaction.status.toLowerCase()} transaction.`);
+    err.status = 400;
+    throw err;
   }
 
   if (transaction.status === "DISPUTED") {
@@ -304,10 +373,12 @@ async function confirmBuyerReceipt(transactionId, user) {
     throw err;
   }
 
+  const previousStatus = transaction.status;
   transaction.buyerConfirmed = true;
   transaction.buyerConfirmedAt = new Date();
 
-  // If currently pending, transition to in progress
+  recordHistory(transaction, "BUYER_CONFIRMED", user.id, previousStatus, transaction.status, "Buyer confirmed receipt and inspection.");
+
   if (transaction.status === "PENDING") {
     transaction.status = "HANDOVER_IN_PROGRESS";
     if (!transaction.handoverStartedAt) {
@@ -320,6 +391,7 @@ async function confirmBuyerReceipt(transactionId, user) {
   if (wasCompleted) {
     transaction.status = "COMPLETED";
     transaction.completedAt = new Date();
+    recordHistory(transaction, "COMPLETED", user.id, previousStatus, "COMPLETED", "Both parties verified handover. Transaction completed.");
   }
 
   await transaction.save();
@@ -377,8 +449,8 @@ async function confirmBuyerReceipt(transactionId, user) {
 async function reportDispute(transactionId, user, reason) {
   const transaction = await getTransactionById(transactionId, user);
 
-  if (transaction.status === "COMPLETED") {
-    const err = new Error("Cannot dispute an already completed transaction.");
+  if (["COMPLETED", "CANCELLED", "FAILED"].includes(transaction.status)) {
+    const err = new Error(`Cannot dispute a ${transaction.status.toLowerCase()} transaction.`);
     err.status = 400;
     throw err;
   }
@@ -389,10 +461,13 @@ async function reportDispute(transactionId, user, reason) {
     throw err;
   }
 
+  const previousStatus = transaction.status;
   transaction.status = "DISPUTED";
   transaction.disputeReason = String(reason).trim();
   transaction.disputedBy = user.id;
   transaction.disputedAt = new Date();
+
+  recordHistory(transaction, "DISPUTED", user.id, previousStatus, "DISPUTED", `Dispute reported: ${transaction.disputeReason}`);
 
   await transaction.save();
 
@@ -418,7 +493,8 @@ async function reportDispute(transactionId, user, reason) {
     .populate("listing")
     .populate("seller", "name email role")
     .populate("buyer", "name email role")
-    .populate("disputedBy", "name email role");
+    .populate("disputedBy", "name email role")
+    .populate("history.performedBy", "name role");
 }
 
 /**
@@ -437,10 +513,13 @@ async function resolveDispute(transactionId, user) {
     throw err;
   }
 
+  const previousStatus = transaction.status;
   transaction.status = "HANDOVER_IN_PROGRESS";
   transaction.disputeReason = null;
   transaction.disputedBy = null;
   transaction.disputedAt = null;
+
+  recordHistory(transaction, "DISPUTE_RESOLVED", user.id, previousStatus, "HANDOVER_IN_PROGRESS", "Dispute marked resolved. Handover resumed.");
 
   await transaction.save();
 
@@ -448,13 +527,12 @@ async function resolveDispute(transactionId, user) {
     const sellerId = transaction.seller?._id?.toString() || transaction.seller?.toString();
     const buyerId = transaction.buyer?._id?.toString() || transaction.buyer?.toString();
     const otherPartyId = user.id === sellerId ? buyerId : sellerId;
-    const listingTitle = transaction.listing?.title || "your item";
 
     await notificationService.createNotification({
       recipient: otherPartyId,
       type: "HANDOVER_RESOLVED",
       title: "Handover Dispute Resolved",
-      message: `The dispute on "${listingTitle}" has been resolved. Handover coordination resumed.`,
+      message: `The handover issue for "${transaction.listing?.title || "your item"}" has been marked resolved.`,
       listing: transaction.listing?._id || transaction.listing,
       transaction: transaction._id,
     });
@@ -462,10 +540,120 @@ async function resolveDispute(transactionId, user) {
     console.error("Dispute resolve notification error:", notifErr.message);
   }
 
+  return transaction;
+}
+
+/**
+ * Record an unsuccessful transaction outcome (CANCELLED or FAILED) - Part 1
+ * Scenarios:
+ * - BUYER_NO_SHOW: Buyer failed to show up for meetup -> FAILED
+ * - SELLER_CANCELLED: Seller cancelled handover -> CANCELLED
+ * - ITEM_MISMATCH: Buyer rejects item because it does not match listing -> FAILED
+ * - ITEM_DAMAGED: Item damaged or broken during inspection -> FAILED
+ * - MUTUAL_CANCEL: Both parties agree to cancel -> CANCELLED
+ * - OTHER: Custom cancellation or failure
+ *
+ * @param {string} transactionId
+ * @param {object} user - req.user
+ * @param {object} params - { outcomeType, reason, targetStatus }
+ * @returns {Promise<Transaction>}
+ */
+async function recordOutcome(transactionId, user, { outcomeType = "OTHER", reason, targetStatus }) {
+  const transaction = await getTransactionById(transactionId, user);
+
+  if (transaction.status === "COMPLETED") {
+    const err = new Error("Cannot cancel or fail an already completed transaction.");
+    err.status = 400;
+    throw err;
+  }
+
+  if (["CANCELLED", "FAILED"].includes(transaction.status)) {
+    const err = new Error(`Transaction is already marked as ${transaction.status.toLowerCase()}.`);
+    err.status = 400;
+    throw err;
+  }
+
+  if (!reason || String(reason).trim().length < 5) {
+    const err = new Error("A specific reason of at least 5 characters is required to cancel or fail a handover.");
+    err.status = 400;
+    throw err;
+  }
+
+  // Determine final status
+  let finalStatus = targetStatus;
+  if (!finalStatus || !["CANCELLED", "FAILED"].includes(finalStatus)) {
+    if (outcomeType === "FAILED" || outcomeType === "CANCELLED") {
+      finalStatus = outcomeType;
+    } else if (["BUYER_NO_SHOW", "ITEM_MISMATCH", "ITEM_DAMAGED"].includes(outcomeType)) {
+      finalStatus = "FAILED";
+    } else {
+      finalStatus = "CANCELLED";
+    }
+  }
+
+  const sellerId = transaction.seller?._id?.toString() || transaction.seller?.toString();
+  const buyerId = transaction.buyer?._id?.toString() || transaction.buyer?.toString();
+  const isAdmin = user.role === "admin";
+  const isSeller = user.id === sellerId;
+  const isBuyer = user.id === buyerId;
+
+  // Role validation on outcome types
+  if (!isAdmin) {
+    if ((outcomeType === "ITEM_MISMATCH" || String(reason).includes("ITEM_MISMATCH")) && !isBuyer) {
+      const err = new Error("Only the buyer can reject an item for listing mismatch.");
+      err.status = 403;
+      throw err;
+    }
+    if ((outcomeType === "BUYER_NO_SHOW" || String(reason).includes("BUYER_NO_SHOW")) && !isSeller) {
+      const err = new Error("Only the seller can report a buyer no-show.");
+      err.status = 403;
+      throw err;
+    }
+  }
+
+  const previousStatus = transaction.status;
+  transaction.status = finalStatus;
+  transaction.outcomeType = outcomeType;
+  transaction.outcomeReason = String(reason).trim();
+  transaction.outcomeInitiatedBy = user.id;
+  transaction.outcomeAt = new Date();
+
+  recordHistory(
+    transaction,
+    "OUTCOME_RECORDED",
+    user.id,
+    previousStatus,
+    finalStatus,
+    `[${outcomeType}] ${transaction.outcomeReason}`
+  );
+
+  await transaction.save();
+
+  // Notify counterparty
+  try {
+    const otherPartyId = user.id === sellerId ? buyerId : sellerId;
+    const notifType = finalStatus === "CANCELLED" ? "HANDOVER_CANCELLED" : "HANDOVER_FAILED";
+    const notifTitle = finalStatus === "CANCELLED" ? "Handover Cancelled" : "Handover Failed";
+
+    await notificationService.createNotification({
+      recipient: otherPartyId,
+      type: notifType,
+      title: notifTitle,
+      message: `Handover for "${transaction.listing?.title || "your item"}" was marked ${finalStatus.toLowerCase()}. Reason: ${transaction.outcomeReason.slice(0, 100)}`,
+      listing: transaction.listing?._id || transaction.listing,
+      transaction: transaction._id,
+    });
+  } catch (notifErr) {
+    console.error("Outcome notification error:", notifErr.message);
+  }
+
   return await Transaction.findById(transaction._id)
     .populate("listing")
     .populate("seller", "name email role")
-    .populate("buyer", "name email role");
+    .populate("buyer", "name email role")
+    .populate("disputedBy", "name email role")
+    .populate("outcomeInitiatedBy", "name email role")
+    .populate("history.performedBy", "name role");
 }
 
 module.exports = {
@@ -477,4 +665,5 @@ module.exports = {
   confirmBuyerReceipt,
   reportDispute,
   resolveDispute,
+  recordOutcome,
 };

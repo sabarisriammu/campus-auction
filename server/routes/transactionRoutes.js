@@ -6,8 +6,6 @@ const transactionService = require("../services/transactionService");
 /**
  * GET /api/transactions
  * Retrieve all transactions accessible to the authenticated user.
- * - Admin sees all transactions.
- * - Seller/Buyer sees only transactions they are a party to.
  */
 router.get("/", authenticate, async (req, res) => {
   try {
@@ -36,11 +34,11 @@ router.get("/listing/:listingId", authenticate, async (req, res) => {
 
     if (!transaction) {
       return res.status(404).json({
-        message: "No eligible handover transaction exists for this listing. Only completed sold auctions have handover tracking.",
+        message:
+          "No eligible handover transaction exists for this listing. Only completed sold auctions have handover tracking.",
       });
     }
 
-    // Access control
     const sellerId = transaction.seller?._id?.toString() || transaction.seller?.toString();
     const buyerId = transaction.buyer?._id?.toString() || transaction.buyer?.toString();
 
@@ -77,7 +75,6 @@ router.get("/:id", authenticate, async (req, res) => {
 /**
  * PATCH /api/transactions/:id/start
  * Start or update handover coordination (location and notes).
- * Transitions PENDING -> HANDOVER_IN_PROGRESS.
  */
 router.patch("/:id/start", authenticate, async (req, res) => {
   try {
@@ -177,6 +174,31 @@ router.patch("/:id/resolve", authenticate, async (req, res) => {
   } catch (error) {
     return res.status(error.status || 500).json({
       message: error.message || "Failed to resolve dispute.",
+    });
+  }
+});
+
+/**
+ * PATCH /api/transactions/:id/outcome (Part 1 - Explicit Unsuccessful Outcomes)
+ * Record CANCELLED or FAILED with reason, outcomeType, and persistent history.
+ */
+router.patch("/:id/outcome", authenticate, async (req, res) => {
+  try {
+    const { outcomeType, reason, outcomeReason, targetStatus, notes } = req.body;
+    const resolvedReason = reason || outcomeReason || notes || "Handover cancelled or failed.";
+    const transaction = await transactionService.recordOutcome(req.params.id, req.user, {
+      outcomeType,
+      reason: resolvedReason,
+      targetStatus: targetStatus || (["CANCELLED", "FAILED"].includes(outcomeType) ? outcomeType : undefined),
+    });
+
+    return res.status(200).json({
+      message: `Handover transaction marked as ${transaction.status.toLowerCase()}.`,
+      transaction,
+    });
+  } catch (error) {
+    return res.status(error.status || 500).json({
+      message: error.message || "Failed to record transaction outcome.",
     });
   }
 });

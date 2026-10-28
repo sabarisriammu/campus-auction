@@ -1,12 +1,63 @@
 const mongoose = require("mongoose");
 
+const TRANSACTION_STATUSES = [
+  "PENDING",
+  "HANDOVER_IN_PROGRESS",
+  "COMPLETED",
+  "DISPUTED",
+  "CANCELLED",
+  "FAILED",
+];
+
+const OUTCOME_TYPES = [
+  "BUYER_NO_SHOW",
+  "SELLER_CANCELLED",
+  "ITEM_MISMATCH",
+  "ITEM_DAMAGED",
+  "MUTUAL_CANCEL",
+  "OTHER",
+  "CANCELLED",
+  "FAILED",
+  null,
+];
+
+const transactionHistorySchema = new mongoose.Schema(
+  {
+    action: {
+      type: String,
+      required: true,
+    },
+    performedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    timestamp: {
+      type: Date,
+      default: Date.now,
+    },
+    previousStatus: {
+      type: String,
+      default: null,
+    },
+    newStatus: {
+      type: String,
+      default: null,
+    },
+    notes: {
+      type: String,
+      default: null,
+    },
+  },
+  { _id: false }
+);
+
 const transactionSchema = new mongoose.Schema(
   {
     listing: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Listing",
       required: [true, "Listing reference is required."],
-      unique: true,
       index: true,
     },
     seller: {
@@ -29,8 +80,10 @@ const transactionSchema = new mongoose.Schema(
     status: {
       type: String,
       enum: {
-        values: ["PENDING", "HANDOVER_IN_PROGRESS", "COMPLETED", "DISPUTED"],
-        message: "{VALUE} is not a valid transaction status. Allowed: PENDING, HANDOVER_IN_PROGRESS, COMPLETED, DISPUTED.",
+        values: TRANSACTION_STATUSES,
+        message:
+          "{VALUE} is not a valid transaction status. Allowed: " +
+          TRANSACTION_STATUSES.join(", "),
       },
       default: "PENDING",
       index: true,
@@ -89,6 +142,32 @@ const transactionSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Unsuccessful Outcome Tracking (Part 1)
+    outcomeType: {
+      type: String,
+      enum: {
+        values: OUTCOME_TYPES,
+        message: "{VALUE} is not a valid outcome type.",
+      },
+      default: null,
+    },
+    outcomeReason: {
+      type: String,
+      trim: true,
+      maxlength: [1000, "Outcome reason cannot exceed 1000 characters."],
+      default: null,
+    },
+    outcomeInitiatedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+    outcomeAt: {
+      type: Date,
+      default: null,
+    },
+    // Persistent Audit History Log
+    history: [transactionHistorySchema],
   },
   {
     timestamps: true,
@@ -97,5 +176,8 @@ const transactionSchema = new mongoose.Schema(
 
 transactionSchema.index({ seller: 1, status: 1 });
 transactionSchema.index({ buyer: 1, status: 1 });
+transactionSchema.index({ listing: 1, status: 1 });
 
 module.exports = mongoose.model("Transaction", transactionSchema);
+module.exports.TRANSACTION_STATUSES = TRANSACTION_STATUSES;
+module.exports.OUTCOME_TYPES = OUTCOME_TYPES;

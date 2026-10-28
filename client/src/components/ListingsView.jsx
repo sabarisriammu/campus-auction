@@ -35,6 +35,8 @@ export default function ListingsView({
   onRefresh,
   user,
   onOpenCreate,
+  savedListingIds = new Set(),
+  onToggleWatchlist,
 }) {
   const [sortBy, setSortBy] = useState("endingSoon");
 
@@ -280,6 +282,8 @@ export default function ListingsView({
                 listing={item}
                 onSelect={onSelectListing}
                 isOwner={user && item.seller && user.id === (item.seller._id || item.seller)}
+                isSaved={savedListingIds && savedListingIds.has(item._id)}
+                onToggleWatchlist={onToggleWatchlist}
               />
             ))}
           </div>

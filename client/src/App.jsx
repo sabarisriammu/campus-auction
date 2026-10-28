@@ -6,6 +6,7 @@ import CreateListingModal from "./components/CreateListingModal";
 import EditListingModal from "./components/EditListingModal";
 import AuthModal from "./components/AuthModal";
 import TransactionsView from "./components/TransactionsView";
+import WatchlistView from "./components/WatchlistView";
 import { api } from "./services/api";
 import { getSocket, disconnectSocket } from "./services/socket";
 
@@ -42,6 +43,55 @@ export default function App() {
   const [notifications, setNotifications] = useState([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const [loadingNotifications, setLoadingNotifications] = useState(false);
+
+  // Watchlist State (Advanced Module)
+  const [savedListingIds, setSavedListingIds] = useState(new Set());
+
+  // Fetch Watchlist IDs for authenticated user
+  const fetchWatchlistIds = useCallback(async () => {
+    if (!token) {
+      setSavedListingIds(new Set());
+      return;
+    }
+    try {
+      const data = await api.getWatchlistIds(token);
+      setSavedListingIds(new Set(data.savedIds || []));
+    } catch (err) {
+      console.warn("Failed to fetch watchlist IDs:", err.message);
+    }
+  }, [token]);
+
+  useEffect(() => {
+    fetchWatchlistIds();
+  }, [fetchWatchlistIds]);
+
+  const handleToggleWatchlist = async (listingId) => {
+    if (!user || !token) {
+      showToast("Please sign in to save items to your watchlist.", "info");
+      setAuthMode("login");
+      setIsAuthOpen(true);
+      return;
+    }
+
+    const isSaved = savedListingIds.has(listingId);
+    try {
+      if (isSaved) {
+        await api.removeFromWatchlist(listingId, token);
+        setSavedListingIds((prev) => {
+          const next = new Set(prev);
+          next.delete(listingId);
+          return next;
+        });
+        showToast("Removed from watchlist.", "info");
+      } else {
+        const res = await api.addToWatchlist(listingId, token);
+        setSavedListingIds((prev) => new Set(prev).add(listingId));
+        showToast(res.message || "Saved to watchlist!", "success");
+      }
+    } catch (err) {
+      showToast(err.message || "Failed to update watchlist.", "danger");
+    }
+  };
 
   // Toast Notification
   const [toast, setToast] = useState(null);
@@ -157,6 +207,7 @@ export default function App() {
     setUser(null);
     setNotifications([]);
     setUnreadCount(0);
+    setSavedListingIds(new Set());
     localStorage.removeItem("campus_token");
     localStorage.removeItem("campus_user");
     showToast("You have been signed out.", "info");
@@ -283,6 +334,7 @@ export default function App() {
         loadingNotifications={loadingNotifications}
         fetchNotifications={fetchNotifications}
         onNavigate={handleNotificationNavigate}
+        watchlistCount={savedListingIds.size}
       />
 
       {/* Main Content Body */}
@@ -293,6 +345,17 @@ export default function App() {
             token={token}
             onSwitchToBrowse={() => setActiveTab("browse")}
             showToast={showToast}
+          />
+        ) : activeTab === "watchlist" ? (
+          <WatchlistView
+            user={user}
+            token={token}
+            onSelectListing={handleSelectListing}
+            onSwitchToBrowse={() => setActiveTab("browse")}
+            showToast={showToast}
+            onWatchlistCountChange={(count) => {
+              fetchWatchlistIds();
+            }}
           />
         ) : (
           <ListingsView
@@ -307,6 +370,8 @@ export default function App() {
             onRefresh={loadListings}
             user={user}
             onOpenCreate={() => setIsCreateOpen(true)}
+            savedListingIds={savedListingIds}
+            onToggleWatchlist={handleToggleWatchlist}
           />
         )}
       </main>
@@ -352,6 +417,13 @@ export default function App() {
           onOpenAuth={(mode) => {
             setAuthMode(mode);
             setIsAuthOpen(true);
+          }}
+          isSaved={selectedListing && savedListingIds.has(selectedListing._id)}
+          onToggleWatchlist={handleToggleWatchlist}
+          onRelistSuccess={(newListing, msg) => {
+            showToast(msg || "Item relisted successfully!");
+            setSelectedListing(null);
+            loadListings();
           }}
         />
       )}

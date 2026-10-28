@@ -11,8 +11,12 @@ const listingRoutes = require("./routes/listingRoutes");
 const bidRoutes = require("./routes/bidRoutes");
 const transactionRoutes = require("./routes/transactionRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
+const watchlistRoutes = require("./routes/watchlistRoutes");
+const secondChanceRoutes = require("./routes/secondChanceRoutes");
 const notificationService = require("./services/notificationService");
 const { processExpiredAuctions } = require("./services/auctionService");
+const { processAuctionReminders } = require("./services/reminderService");
+const { checkAndExpireOffers } = require("./services/secondChanceService");
 require("dotenv").config();
 
 const app = express();
@@ -85,6 +89,8 @@ app.use("/api/listings", bidRoutes);
 app.use("/api/bids", bidRoutes);
 app.use("/api/transactions", transactionRoutes);
 app.use("/api/notifications", notificationRoutes);
+app.use("/api/watchlist", watchlistRoutes);
+app.use("/api", secondChanceRoutes);
 
 app.get("/", (req, res) => {
   res.json({
@@ -99,12 +105,40 @@ async function startServer() {
     await mongoose.connect(process.env.MONGO_URI);
     console.log("MongoDB connected successfully!");
 
-    // Initialize periodic background scheduler for closing expired auctions (runs every 30 seconds)
+    // Index migration: ensure old unique index on transactions.listing is dropped to allow failed + fallback transactions
+    try {
+      const txIndexes = await mongoose.connection.collection("transactions").indexes();
+      const listingUniqueIdx = txIndexes.find((idx) => idx.name === "listing_1" && idx.unique);
+      if (listingUniqueIdx) {
+        await mongoose.connection.collection("transactions").dropIndex("listing_1");
+        await mongoose.connection.collection("transactions").createIndex({ listing: 1 });
+        console.log("Migrated transactions listing index to non-unique for historical logs.");
+      }
+    } catch (idxErr) {
+      // Ignore if collection or index does not exist
+    }
+
+    // Initialize periodic background scheduler (runs every 30 seconds):
+    // 1. Expire past-deadline auctions and assign winners
+    // 2. Dispatch 15-minute and 5-minute auction ending reminders
+    // 3. Mark elapsed second-chance offers as EXPIRED
     setInterval(async () => {
       try {
         await processExpiredAuctions();
       } catch (err) {
         console.error("Background auction expiry check error:", err.message);
+      }
+
+      try {
+        await processAuctionReminders();
+      } catch (err) {
+        console.error("Background auction reminder error:", err.message);
+      }
+
+      try {
+        await checkAndExpireOffers();
+      } catch (err) {
+        console.error("Background second-chance expiry check error:", err.message);
       }
     }, 30000);
 

@@ -1,6 +1,8 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const Listing = require("../models/Listing");
+const Transaction = require("../models/Transaction");
+const SecondChanceOffer = require("../models/SecondChanceOffer");
 const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 const { closeExpiredAuction, processExpiredAuctions } = require("../services/auctionService");
@@ -538,6 +540,123 @@ const handleCancelListing = async (req, res) => {
     });
   }
 };
+
+// POST /api/listings/:id/relist - Relist an auction whose handover was cancelled/failed or ended unsold
+router.post("/:id/relist", authenticate, authorizeRoles("seller", "admin"), async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid listing ID format." });
+    }
+
+    const originalListing = await Listing.findById(id);
+    if (!originalListing) {
+      return res.status(404).json({ message: "Original listing not found." });
+    }
+
+    // Authorization: seller or admin
+    const isOwner = originalListing.seller.toString() === req.user.id.toString();
+    const isAdmin = req.user.role === "admin";
+    if (!isOwner && !isAdmin) {
+      return res.status(403).json({ message: "Only the seller or an admin can relist this auction." });
+    }
+
+    // Cannot relist if already relisted
+    if (originalListing.isRelisted || originalListing.relistedTo) {
+      return res.status(400).json({ message: "This listing has already been relisted." });
+    }
+
+    // Cannot relist an active auction
+    if (originalListing.status === "active") {
+      return res.status(400).json({ message: "Cannot relist an auction that is still active." });
+    }
+
+    // If the auction was sold, verify handover transaction outcome
+    if (originalListing.status === "completed" && originalListing.outcome === "sold") {
+      const tx = await Transaction.findOne({ listing: id }).sort({ createdAt: -1 });
+      if (!tx || !["CANCELLED", "FAILED"].includes(tx.status)) {
+        return res.status(400).json({
+          message: "Cannot relist a sold auction unless the handover transaction has ended in CANCELLED or FAILED.",
+        });
+      }
+
+      // Check if an accepted second chance offer exists
+      const acceptedOffer = await SecondChanceOffer.findOne({ listing: id, status: "ACCEPTED" });
+      if (acceptedOffer) {
+        return res.status(400).json({
+          message: "Cannot relist an auction that has an accepted second-chance winner.",
+        });
+      }
+    }
+
+    const {
+      startingPrice,
+      minBidIncrement,
+      auctionEndTime,
+      durationHours,
+      title,
+      description,
+      category,
+      condition,
+      imageUrl,
+    } = req.body;
+
+    const newStartingPrice = startingPrice !== undefined ? Number(startingPrice) : originalListing.startingPrice;
+    if (isNaN(newStartingPrice) || newStartingPrice <= 0) {
+      return res.status(400).json({ message: "Starting price must be a valid positive number greater than ₹0.00." });
+    }
+
+    const newIncrement = minBidIncrement !== undefined ? Number(minBidIncrement) : originalListing.minBidIncrement;
+    if (isNaN(newIncrement) || newIncrement <= 0) {
+      return res.status(400).json({ message: "Minimum bid increment must be greater than ₹0.00." });
+    }
+
+    let newEndTime = null;
+    if (auctionEndTime) {
+      newEndTime = new Date(auctionEndTime);
+    } else if (durationHours) {
+      newEndTime = new Date(Date.now() + Number(durationHours) * 60 * 60 * 1000);
+    }
+
+    if (!newEndTime || isNaN(newEndTime.getTime()) || newEndTime <= new Date()) {
+      return res.status(400).json({ message: "Auction end time must be a valid future date and time." });
+    }
+
+    // Create the new relisted listing
+    const newListing = await Listing.create({
+      title: title && title.trim() ? title.trim() : originalListing.title,
+      description: description && description.trim() ? description.trim() : originalListing.description,
+      category: category && category.trim() ? category.trim() : originalListing.category,
+      condition: condition && ALLOWED_CONDITIONS.includes(condition) ? condition : originalListing.condition,
+      startingPrice: newStartingPrice,
+      currentPrice: newStartingPrice,
+      minBidIncrement: newIncrement,
+      auctionEndTime: newEndTime,
+      seller: originalListing.seller,
+      status: "active",
+      imageUrl: imageUrl !== undefined ? imageUrl : originalListing.imageUrl,
+      relistedFrom: originalListing._id,
+    });
+
+    // Mark original listing as relisted
+    originalListing.isRelisted = true;
+    originalListing.relistedTo = newListing._id;
+    await originalListing.save();
+
+    const populatedNewListing = await Listing.findById(newListing._id)
+      .populate("seller", "name email role")
+      .populate("relistedFrom", "title auctionEndTime outcome");
+
+    return res.status(201).json({
+      message: "Auction relisted successfully as a new auction!",
+      listing: populatedNewListing,
+      originalListingId: originalListing._id,
+    });
+  } catch (error) {
+    console.error("Relist auction error:", error.message);
+    return res.status(500).json({ message: "Failed to relist auction due to a server error." });
+  }
+});
 
 router.patch("/:id/cancel", authenticate, authorizeRoles("seller", "admin"), handleCancelListing);
 router.delete("/:id", authenticate, authorizeRoles("seller", "admin"), handleCancelListing);

@@ -239,4 +239,103 @@ export const api = {
     });
     return handleResponse(response);
   },
+
+  // Transaction Outcomes (Advanced Module)
+  async recordTransactionOutcome(id, { outcomeType, outcomeReason, notes }, token) {
+    const response = await fetch(`${API_BASE_URL}/transactions/${id}/outcome`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ outcomeType, outcomeReason, notes }),
+    });
+    return handleResponse(response);
+  },
+
+  // Relisting endpoints (Advanced Module)
+  async relistListing(id, relistData, token) {
+    const response = await fetch(`${API_BASE_URL}/listings/${id}/relist`, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify(relistData),
+    });
+    return handleResponse(response);
+  },
+
+  // Watchlist endpoints (Advanced Module)
+  async getWatchlist(token) {
+    const response = await fetch(`${API_BASE_URL}/watchlist`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async getWatchlistIds(token) {
+    const response = await fetch(`${API_BASE_URL}/watchlist/ids`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async checkWatchlist(listingId, token) {
+    const response = await fetch(`${API_BASE_URL}/watchlist/check/${listingId}`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async addToWatchlist(listingId, token) {
+    const response = await fetch(`${API_BASE_URL}/watchlist/${listingId}`, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async removeFromWatchlist(listingId, token) {
+    const response = await fetch(`${API_BASE_URL}/watchlist/${listingId}`, {
+      method: "DELETE",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  // Second Chance Fallback endpoints (Advanced Module)
+  async getSecondChanceCandidates(listingId, token) {
+    const response = await fetch(`${API_BASE_URL}/listings/${listingId}/second-chance/candidates`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async createSecondChanceOffer(listingId, offerData, token) {
+    const response = await fetch(`${API_BASE_URL}/listings/${listingId}/second-chance`, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify(offerData),
+    });
+    return handleResponse(response);
+  },
+
+  async getMySecondChanceOffers(token) {
+    const response = await fetch(`${API_BASE_URL}/second-chance/my-offers`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async acceptSecondChanceOffer(offerId, token) {
+    const response = await fetch(`${API_BASE_URL}/second-chance/${offerId}/accept`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async declineSecondChanceOffer(offerId, reason, token) {
+    const response = await fetch(`${API_BASE_URL}/second-chance/${offerId}/decline`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ reason }),
+    });
+    return handleResponse(response);
+  },
 };
