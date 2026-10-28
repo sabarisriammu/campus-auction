@@ -92,7 +92,7 @@ async function closeExpiredAuction(listingId) {
           recipient: winnerId,
           type: "AUCTION_WON",
           title: "Auction Won!",
-          message: `Congratulations! You won the auction for "${closedListing.title}" with a winning bid of $${soldPrice}.`,
+          message: `Congratulations! You won the auction for "${closedListing.title}" with a winning bid of ₹${soldPrice}.`,
           listing: closedListing._id,
           deduplicate: true,
         });
@@ -102,7 +102,7 @@ async function closeExpiredAuction(listingId) {
           recipient: sellerId,
           type: "AUCTION_SOLD",
           title: "Item Sold!",
-          message: `Your listing "${closedListing.title}" sold for $${soldPrice}.`,
+          message: `Your listing "${closedListing.title}" sold for ₹${soldPrice}.`,
           listing: closedListing._id,
           deduplicate: true,
         });

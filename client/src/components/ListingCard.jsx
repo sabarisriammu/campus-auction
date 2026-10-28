@@ -1,4 +1,6 @@
 import React from "react";
+import { formatCurrency } from "../utils/formatters";
+import { useCountdown } from "../hooks/useCountdown";
 
 export default function ListingCard({ listing, onSelect, isOwner }) {
   const {
@@ -26,7 +28,10 @@ export default function ListingCard({ listing, onSelect, isOwner }) {
   const isCompleted = status === "completed";
   const isSold = isCompleted && outcome === "sold";
   const isUnsold = isCompleted && outcome === "unsold";
-  const isExpired = new Date(auctionEndTime) <= new Date();
+
+  // Real-time second-by-second countdown hook
+  const countdown = useCountdown(auctionEndTime);
+  const isEnded = isCompleted || countdown.isEnded;
 
   // Category Icon helper for placeholder
   const getCategoryIcon = (cat) => {
@@ -46,25 +51,6 @@ export default function ListingCard({ listing, onSelect, isOwner }) {
       default:
         return "📦";
     }
-  };
-
-  // Calculate remaining time
-  const getTimeRemaining = (endTimeStr) => {
-    if (isCompleted) {
-      return isSold ? "Sold" : "Ended Unsold";
-    }
-    if (isCancelled) return "Cancelled";
-
-    const totalMs = new Date(endTimeStr) - new Date();
-    if (totalMs <= 0) return "Auction Ended";
-
-    const days = Math.floor(totalMs / (1000 * 60 * 60 * 24));
-    const hours = Math.floor((totalMs / (1000 * 60 * 60)) % 24);
-    const minutes = Math.floor((totalMs / 1000 / 60) % 60);
-
-    if (days > 0) return `${days}d ${hours}h left`;
-    if (hours > 0) return `${hours}h ${minutes}m left`;
-    return `${minutes}m left`;
   };
 
   const conditionColors = {
@@ -108,8 +94,11 @@ export default function ListingCard({ listing, onSelect, isOwner }) {
           {isSold && <span className="badge badge-green">Sold</span>}
           {isUnsold && <span className="badge badge-gray">Unsold</span>}
           {isCancelled && <span className="badge badge-red">Cancelled</span>}
-          {!isCompleted && !isCancelled && isExpired && (
+          {!isCompleted && !isCancelled && countdown.isEnded && (
             <span className="badge badge-yellow">Ended</span>
+          )}
+          {!isCompleted && !isCancelled && !countdown.isEnded && countdown.urgent && (
+            <span className="badge badge-urgent-pulse">⚡ Ending Soon</span>
           )}
         </div>
       </div>
@@ -140,17 +129,36 @@ export default function ListingCard({ listing, onSelect, isOwner }) {
           <span className="price-label">
             {isSold ? "Final Price" : "Current Bid"}
           </span>
-          <div className="price-amount">${Number(displayPrice).toFixed(2)}</div>
+          <div className="price-amount font-mono">
+            {formatCurrency(displayPrice)}
+          </div>
         </div>
+
         <div className="time-remaining">
-          <span className="time-label">Status</span>
-          <span
-            className={`time-value ${
-              isSold ? "text-success" : isCancelled || isUnsold ? "text-muted" : ""
-            }`}
-          >
-            {getTimeRemaining(auctionEndTime)}
-          </span>
+          <span className="time-label">Time Remaining</span>
+          {isCompleted ? (
+            <span className={`time-pill ${isSold ? "status-sold" : "status-ended"}`}>
+              {isSold ? "🏆 Sold" : "📦 Ended"}
+            </span>
+          ) : isCancelled ? (
+            <span className="time-pill status-cancelled">🚫 Cancelled</span>
+          ) : (
+            <span
+              className={`time-pill countdown-pill font-mono ${
+                countdown.isEnded
+                  ? "countdown-ended"
+                  : countdown.urgent
+                  ? "countdown-urgent"
+                  : "countdown-active"
+              }`}
+            >
+              {countdown.isEnded
+                ? "⌛ Auction ended"
+                : countdown.urgent
+                ? `⚡ ${countdown.formatted}`
+                : `⏱️ ${countdown.formatted}`}
+            </span>
+          )}
         </div>
       </div>
 
@@ -159,8 +167,11 @@ export default function ListingCard({ listing, onSelect, isOwner }) {
           <span className="seller-icon">👤</span>
           <span className="seller-name">{seller?.name || "Campus Member"}</span>
         </div>
-        <button className="btn btn-outline btn-sm" onClick={() => onSelect(_id)}>
-          View Details
+        <button
+          className="btn btn-outline btn-sm"
+          onClick={() => onSelect(_id)}
+        >
+          View Details →
         </button>
       </div>
     </div>

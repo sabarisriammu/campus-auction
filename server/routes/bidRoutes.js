@@ -31,7 +31,7 @@ const handlePlaceBid = async (req, res) => {
     parsedAmount <= 0
   ) {
     return res.status(400).json({
-      message: "Bid amount must be a valid positive number greater than $0.00.",
+      message: "Bid amount must be a valid positive number greater than ₹0.00.",
     });
   }
 
@@ -98,7 +98,7 @@ const handlePlaceBid = async (req, res) => {
       if (normalizedAmount < minRequiredPrice) {
         if (session) await session.abortTransaction();
         return res.status(400).json({
-          message: `First bid must be at least the starting price of $${minRequiredPrice.toFixed(2)}.`,
+          message: `First bid must be at least the starting price of ₹${minRequiredPrice.toFixed(2)}.`,
         });
       }
     } else {
@@ -107,7 +107,7 @@ const handlePlaceBid = async (req, res) => {
       if (normalizedAmount < minRequiredPrice) {
         if (session) await session.abortTransaction();
         return res.status(400).json({
-          message: `Bid must be at least $${minRequiredPrice.toFixed(2)} (current bid $${listing.currentPrice.toFixed(2)} + min increment $${minIncrement.toFixed(2)}).`,
+          message: `Bid must be at least ₹${minRequiredPrice.toFixed(2)} (current bid ₹${listing.currentPrice.toFixed(2)} + min increment ₹${minIncrement.toFixed(2)}).`,
         });
       }
     }
@@ -167,7 +167,7 @@ const handlePlaceBid = async (req, res) => {
         recipient: listing.seller,
         type: "NEW_BID",
         title: "New Bid Placed",
-        message: `A new bid of $${normalizedAmount.toFixed(2)} was placed on "${listing.title}".`,
+        message: `A new bid of ₹${normalizedAmount.toFixed(2)} was placed on "${listing.title}".`,
         listing: listing._id,
         bid: createdBid._id,
       });
@@ -181,7 +181,7 @@ const handlePlaceBid = async (req, res) => {
           recipient: previousHighestBid.bidder,
           type: "OUTBID",
           title: "You Have Been Outbid",
-          message: `You were outbid on "${listing.title}". The new highest bid is $${normalizedAmount.toFixed(2)}.`,
+          message: `You were outbid on "${listing.title}". The new highest bid is ₹${normalizedAmount.toFixed(2)}.`,
           listing: listing._id,
           bid: createdBid._id,
         });

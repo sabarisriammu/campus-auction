@@ -40,7 +40,7 @@ export default function Navbar({
           <span className="brand-icon">🎓</span>
           <div className="brand-text">
             <span className="brand-title">Campus Auction</span>
-            <span className="brand-subtitle">Student Marketplace</span>
+            <span className="brand-subtitle">Student Marketplace • 🇮🇳</span>
           </div>
         </div>
 

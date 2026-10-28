@@ -1,5 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
+import { formatCurrency } from "../utils/formatters";
+import { useCountdown } from "../hooks/useCountdown";
 
 export default function ListingDetailsModal({
   listing,
@@ -71,7 +73,12 @@ export default function ListingDetailsModal({
   const isCompleted = status === "completed";
   const isSold = isCompleted && outcome === "sold";
   const isUnsold = isCompleted && outcome === "unsold";
-  const isExpired = new Date(auctionEndTime) <= new Date();
+
+  // Real-time second-by-second countdown hook
+  const countdown = useCountdown(auctionEndTime, () => {
+    fetchBids();
+  });
+  const isExpired = isCompleted || countdown.isEnded;
 
   const sellerId = typeof seller === "object" ? seller?._id : seller;
   const isOwner = user && sellerId && user.id === sellerId.toString();
@@ -89,7 +96,7 @@ export default function ListingDetailsModal({
       : Number((currentPrice + minIncrement).toFixed(2));
 
   const canBid =
-    isBuyer && !isOwner && status === "active" && !isExpired && !isCompleted && !isCancelled;
+    isBuyer && !isOwner && status === "active" && !countdown.isEnded && !isCompleted && !isCancelled;
 
   const formattedEndDate = new Date(auctionEndTime).toLocaleString(undefined, {
     weekday: "short",
@@ -126,6 +133,11 @@ export default function ListingDetailsModal({
     setBidError("");
     setBidSuccess("");
 
+    if (countdown.isEnded) {
+      setBidError("Bidding is closed because the auction deadline has passed.");
+      return;
+    }
+
     const val = Number(bidAmount);
     if (isNaN(val) || val <= 0) {
       setBidError("Please enter a valid positive bid amount.");
@@ -135,8 +147,8 @@ export default function ListingDetailsModal({
     if (val < nextMinBid) {
       setBidError(
         bids.length === 0
-          ? `First bid must be at least the starting price of $${nextMinBid.toFixed(2)}.`
-          : `Bid must be at least $${nextMinBid.toFixed(2)} (current bid $${currentPrice.toFixed(2)} + min increment $${minIncrement.toFixed(2)}).`
+          ? `First bid must be at least the starting price of ${formatCurrency(nextMinBid)}.`
+          : `Bid must be at least ${formatCurrency(nextMinBid)} (current bid ${formatCurrency(currentPrice)} + min increment ${formatCurrency(minIncrement)}).`
       );
       return;
     }
@@ -144,7 +156,7 @@ export default function ListingDetailsModal({
     setSubmittingBid(true);
     try {
       const data = await api.placeBid(_id, val, token);
-      setBidSuccess(`🎉 Bid of $${val.toFixed(2)} placed successfully!`);
+      setBidSuccess(`🎉 Bid of ${formatCurrency(val)} placed successfully!`);
       setCurrentPrice(data.currentPrice);
       setBidAmount("");
       fetchBids();
@@ -196,7 +208,7 @@ export default function ListingDetailsModal({
                 <strong>Auction Completed — Sold!</strong>
                 <p className="outcome-desc">
                   Won by <strong>{winner?.name || "Winning Bidder"}</strong> for{" "}
-                  <strong>${Number(finalPrice || currentPrice).toFixed(2)}</strong> on{" "}
+                  <strong>{formatCurrency(finalPrice || currentPrice)}</strong> on{" "}
                   {formattedCompletionDate}.
                 </p>
                 {user &&
@@ -346,8 +358,8 @@ export default function ListingDetailsModal({
                             </div>
                           </div>
                         </div>
-                        <div className="bid-row-amount">
-                          ${Number(b.amount).toFixed(2)}
+                        <div className="bid-row-amount font-mono">
+                          {formatCurrency(b.amount)}
                         </div>
                       </div>
                     ))}
@@ -357,30 +369,53 @@ export default function ListingDetailsModal({
             </div>
 
             <div className="details-sidebar">
+              {/* Real-time Countdown Box */}
+              {!isCompleted && !isCancelled && (
+                <div className="countdown-widget-box mb-3">
+                  <div className="countdown-widget-header">
+                    <span className="countdown-widget-title">⏱️ Live Auction Countdown</span>
+                    <span
+                      className={`countdown-chip ${
+                        countdown.isEnded
+                          ? "chip-ended"
+                          : countdown.urgent
+                          ? "chip-urgent"
+                          : "chip-live"
+                      }`}
+                    >
+                      {countdown.isEnded ? "Ended" : countdown.urgent ? "⚡ Ending Soon" : "Live"}
+                    </span>
+                  </div>
+                  <div className="countdown-widget-timer font-mono">
+                    {countdown.isEnded ? "Auction ended" : countdown.formatted}
+                  </div>
+                </div>
+              )}
+
               <div className="price-card">
                 <div className="price-card-header">
                   <span className="price-label">
                     {isSold ? "Final Winning Price" : "Current Bid"}
                   </span>
-                  <span className="price-highlight">
-                    ${Number(isSold ? finalPrice || currentPrice : currentPrice).toFixed(2)}
+                  <span className="price-highlight font-mono">
+                    {formatCurrency(isSold ? finalPrice || currentPrice : currentPrice)}
                   </span>
                 </div>
 
                 <div className="price-card-details">
                   <div className="price-detail-row">
                     <span>Starting Price:</span>
-                    <span>${Number(startingPrice).toFixed(2)}</span>
+                    <span className="font-mono">{formatCurrency(startingPrice)}</span>
                   </div>
                   <div className="price-detail-row">
                     <span>Min Bid Increment:</span>
-                    <span>+${Number(minIncrement).toFixed(2)}</span>
+                    <span className="font-mono">+{formatCurrency(minIncrement)}</span>
                   </div>
-                  {!isCompleted && !isCancelled && (
+                  {!isCompleted && !isCancelled && !countdown.isEnded && (
                     <div className="price-detail-row">
                       <span>Next Minimum Bid:</span>
-                      <span className="text-primary font-bold">
-                        ${Number(nextMinBid).toFixed(2)}
+                      <span className="text-primary font-bold font-mono">
+                        {formatCurrency(nextMinBid)}
                       </span>
                     </div>
                   )}
@@ -403,10 +438,10 @@ export default function ListingDetailsModal({
                     <form onSubmit={handleBidSubmit}>
                       <div className="form-group mb-2">
                         <label className="form-label text-sm" htmlFor="bid-amount-input">
-                          Your Bid Amount ($)
+                          Your Bid Amount (₹)
                         </label>
                         <div className="bid-input-wrapper">
-                          <span className="bid-currency-symbol">$</span>
+                          <span className="bid-currency-symbol">₹</span>
                           <input
                             id="bid-amount-input"
                             type="number"
@@ -423,7 +458,7 @@ export default function ListingDetailsModal({
                           />
                         </div>
                         <span className="bid-hint">
-                          Minimum required: ${nextMinBid.toFixed(2)}
+                          Minimum required: {formatCurrency(nextMinBid)}
                         </span>
                       </div>
 
@@ -432,7 +467,7 @@ export default function ListingDetailsModal({
                         className="btn btn-primary btn-block"
                         disabled={submittingBid}
                       >
-                        {submittingBid ? "Submitting Bid..." : `Place Bid ($${bidAmount || nextMinBid.toFixed(2)})`}
+                        {submittingBid ? "Submitting Bid..." : `Place Bid (${formatCurrency(bidAmount || nextMinBid)})`}
                       </button>
                     </form>
                   </div>

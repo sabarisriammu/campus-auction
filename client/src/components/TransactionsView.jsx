@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
+import { formatCurrency } from "../utils/formatters";
 
 export default function TransactionsView({ user, token, onSwitchToBrowse, showToast }) {
   const [transactions, setTransactions] = useState([]);
@@ -251,8 +252,8 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                       <div className="tx-meta-pills">
                         {listing.category && <span className="meta-pill">{listing.category}</span>}
                         {listing.condition && <span className="meta-pill">{listing.condition}</span>}
-                        <span className="tx-price-pill">
-                          Final Price: <strong>${Number(tx.finalPrice).toFixed(2)}</strong>
+                        <span className="tx-price-pill font-mono">
+                          Final Price: <strong>{formatCurrency(tx.finalPrice)}</strong>
                         </span>
                       </div>
                     </div>

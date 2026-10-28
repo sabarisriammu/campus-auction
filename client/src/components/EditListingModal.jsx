@@ -295,7 +295,7 @@ export default function EditListingModal({
             <div className="form-row">
               <div className="form-group col-half">
                 <label className="form-label" htmlFor="edit-startingPrice">
-                  Starting Price ($) *
+                  Starting Price (₹) *
                 </label>
                 <input
                   id="edit-startingPrice"
@@ -312,7 +312,7 @@ export default function EditListingModal({
 
               <div className="form-group col-half">
                 <label className="form-label" htmlFor="edit-minBidIncrement">
-                  Min Bid Increment ($)
+                  Min Bid Increment (₹)
                 </label>
                 <input
                   id="edit-minBidIncrement"

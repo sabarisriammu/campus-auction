@@ -37,7 +37,7 @@ export default function ListingsView({
       {/* Hero Banner */}
       <section className="hero-banner">
         <div className="hero-content">
-          <span className="hero-pill">🎓 Exclusive Campus Marketplace</span>
+          <span className="hero-pill">🎓 Student Campus Exchange • 🇮🇳 All Bids in ₹ (INR)</span>
           <h1 className="hero-title">Discover, Bid & Sell on Campus</h1>
           <p className="hero-subtitle">
             Find peer-to-peer deals on textbooks, tech, dorm essentials, and campus gear with transparent timed auctions.

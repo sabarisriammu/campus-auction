@@ -104,13 +104,13 @@ export default function CreateListingModal({
 
     const price = Number(formData.startingPrice);
     if (isNaN(price) || price <= 0) {
-      setError("Starting price must be a valid number greater than $0.00.");
+      setError("Starting price must be a valid number greater than ₹0.00.");
       return;
     }
 
     const increment = Number(formData.minBidIncrement);
     if (isNaN(increment) || increment <= 0) {
-      setError("Minimum bid increment must be greater than $0.00.");
+      setError("Minimum bid increment must be greater than ₹0.00.");
       return;
     }
 
@@ -340,14 +340,14 @@ export default function CreateListingModal({
               <div className="form-row">
                 <div className="form-group col-half">
                   <label className="form-label" htmlFor="startingPrice">
-                    Starting Price ($) *
+                    Starting Price (₹) *
                   </label>
                   <input
                     id="startingPrice"
                     type="number"
                     name="startingPrice"
                     className="form-control"
-                    placeholder="10.00"
+                    placeholder="e.g. 500.00"
                     step="0.01"
                     min="0.01"
                     value={formData.startingPrice}
@@ -358,14 +358,14 @@ export default function CreateListingModal({
 
                 <div className="form-group col-half">
                   <label className="form-label" htmlFor="minBidIncrement">
-                    Min Bid Increment ($)
+                    Min Bid Increment (₹)
                   </label>
                   <input
                     id="minBidIncrement"
                     type="number"
                     name="minBidIncrement"
                     className="form-control"
-                    placeholder="1.00"
+                    placeholder="e.g. 20.00"
                     step="0.01"
                     min="0.01"
                     value={formData.minBidIncrement}
