@@ -93,6 +93,34 @@ export const api = {
     return handleResponse(response);
   },
 
+  // Lifecycle closure endpoint (Module 6)
+  async closeAuction(listingId, token) {
+    const response = await fetch(`${API_BASE_URL}/listings/${listingId}/close`, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  // Product Image Upload endpoint (Module 6)
+  async uploadImage(file, token) {
+    const formData = new FormData();
+    formData.append("image", file);
+
+    const headers = {};
+    if (token) {
+      headers["Authorization"] = `Bearer ${token}`;
+    }
+    // Do NOT set Content-Type header so the browser automatically computes boundary
+
+    const response = await fetch(`${API_BASE_URL}/listings/upload-image`, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+    return handleResponse(response);
+  },
+
   // Bidding endpoints
   async placeBid(listingId, amount, token) {
     const response = await fetch(`${API_BASE_URL}/listings/${listingId}/bids`, {

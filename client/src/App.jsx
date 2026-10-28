@@ -249,6 +249,7 @@ export default function App() {
         onClose={() => setIsCreateOpen(false)}
         onSubmit={handleCreateListing}
         user={user}
+        token={token}
         onOpenAuth={(mode) => {
           setAuthMode(mode);
           setIsAuthOpen(true);
@@ -262,6 +263,7 @@ export default function App() {
           isOpen={!!editingListing}
           onClose={() => setEditingListing(null)}
           onSubmit={handleUpdateListing}
+          token={token}
         />
       )}
 

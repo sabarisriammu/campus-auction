@@ -80,6 +80,36 @@ const listingSchema = new mongoose.Schema(
       ref: "User",
       required: [true, "Seller is required."],
     },
+
+    // Lifecycle Outcome Fields (Module 6)
+    winner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null,
+    },
+
+    finalPrice: {
+      type: Number,
+      default: null,
+    },
+
+    completionTime: {
+      type: Date,
+      default: null,
+    },
+
+    outcome: {
+      type: String,
+      enum: ["sold", "unsold", null],
+      default: null,
+    },
+
+    // Product Image URL (Module 6)
+    imageUrl: {
+      type: String,
+      default: null,
+      trim: true,
+    },
   },
   {
     timestamps: true,
@@ -88,5 +118,6 @@ const listingSchema = new mongoose.Schema(
 
 listingSchema.index({ status: 1, auctionEndTime: 1 });
 listingSchema.index({ seller: 1 });
+listingSchema.index({ winner: 1 });
 
 module.exports = mongoose.model("Listing", listingSchema);

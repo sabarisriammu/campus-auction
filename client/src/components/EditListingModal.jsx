@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import { api } from "../services/api";
 
 const CATEGORIES = [
   "Textbooks",
@@ -17,10 +18,10 @@ export default function EditListingModal({
   isOpen,
   onClose,
   onSubmit,
+  token,
 }) {
   if (!isOpen || !listing) return null;
 
-  // Format existing end time for datetime-local
   const formatDatetimeForInput = (isoDate) => {
     try {
       const d = new Date(isoDate);
@@ -30,6 +31,12 @@ export default function EditListingModal({
       return "";
     }
   };
+
+  const initialImageUrl = listing.imageUrl
+    ? listing.imageUrl.startsWith("http")
+      ? listing.imageUrl
+      : `http://localhost:5000${listing.imageUrl}`
+    : null;
 
   const [formData, setFormData] = useState({
     title: listing.title || "",
@@ -41,13 +48,48 @@ export default function EditListingModal({
     auctionEndTime: formatDatetimeForInput(listing.auctionEndTime),
   });
 
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(initialImageUrl);
+  const [imageChanged, setImageChanged] = useState(false);
+  const fileInputRef = useRef(null);
+
   const [loading, setLoading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
   const [error, setError] = useState("");
 
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
     if (error) setError("");
+  };
+
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Please select a JPEG, PNG, or WebP image file.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image size exceeds 5MB limit. Please choose a smaller image.");
+      return;
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setImageChanged(true);
+    setError("");
+  };
+
+  const handleRemoveImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    setImageChanged(true);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -83,7 +125,20 @@ export default function EditListingModal({
     }
 
     setLoading(true);
+    let finalImageUrl = listing.imageUrl;
+
     try {
+      if (imageChanged) {
+        if (imageFile) {
+          setUploadStatus("Uploading new image...");
+          const uploadRes = await api.uploadImage(imageFile, token);
+          finalImageUrl = uploadRes.imageUrl;
+        } else {
+          finalImageUrl = null; // Image was explicitly removed
+        }
+      }
+
+      setUploadStatus("Saving listing changes...");
       await onSubmit(listing._id, {
         title: formData.title.trim(),
         description: formData.description.trim(),
@@ -92,12 +147,15 @@ export default function EditListingModal({
         startingPrice: price,
         minBidIncrement: increment,
         auctionEndTime: selectedEndTime.toISOString(),
+        imageUrl: finalImageUrl,
       });
+
       onClose();
     } catch (err) {
       setError(err.message || "Failed to update listing.");
     } finally {
       setLoading(false);
+      setUploadStatus("");
     }
   };
 
@@ -114,6 +172,55 @@ export default function EditListingModal({
         <form onSubmit={handleSubmit}>
           <div className="modal-body">
             {error && <div className="alert alert-danger mb-3">{error}</div>}
+
+            {/* Product Image Edit Section */}
+            <div className="form-group">
+              <label className="form-label">Product Image</label>
+              <div className="image-upload-wrapper">
+                {imagePreview ? (
+                  <div className="image-preview-box">
+                    <img
+                      src={imagePreview}
+                      alt="Product Preview"
+                      className="uploaded-image-preview"
+                    />
+                    <div className="image-preview-actions">
+                      <button
+                        type="button"
+                        className="btn btn-outline btn-sm"
+                        onClick={() => fileInputRef.current?.click()}
+                      >
+                        Replace Image
+                      </button>
+                      <button
+                        type="button"
+                        className="btn btn-danger-outline btn-sm"
+                        onClick={handleRemoveImage}
+                      >
+                        Remove Image
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    className="image-dropzone"
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <span className="dropzone-icon">📷</span>
+                    <p className="dropzone-text">Click to attach a product photo</p>
+                    <span className="dropzone-sub">Supports JPEG, PNG, WebP (Max 5MB)</span>
+                  </div>
+                )}
+
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden-file-input"
+                  onChange={handleImageChange}
+                />
+              </div>
+            </div>
 
             <div className="form-group">
               <label className="form-label" htmlFor="edit-title">
@@ -250,7 +357,7 @@ export default function EditListingModal({
               className="btn btn-primary"
               disabled={loading}
             >
-              {loading ? "Saving Changes..." : "Save Changes"}
+              {loading ? uploadStatus || "Saving Changes..." : "Save Changes"}
             </button>
           </div>
         </form>

@@ -1,4 +1,5 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import { api } from "../services/api";
 
 const CATEGORIES = [
   "Textbooks",
@@ -17,6 +18,7 @@ export default function CreateListingModal({
   onClose,
   onSubmit,
   user,
+  token,
   onOpenAuth,
 }) {
   const getDefaultEndTime = () => {
@@ -26,7 +28,7 @@ export default function CreateListingModal({
   };
 
   const getMinEndTime = () => {
-    const d = new Date(Date.now() + 10 * 60 * 1000); // at least 10 minutes from now
+    const d = new Date(Date.now() + 10 * 60 * 1000);
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     return d.toISOString().slice(0, 16);
   };
@@ -41,7 +43,12 @@ export default function CreateListingModal({
     auctionEndTime: getDefaultEndTime(),
   });
 
+  const [imageFile, setImageFile] = useState(null);
+  const [imagePreview, setImagePreview] = useState(null);
+  const fileInputRef = useRef(null);
+
   const [loading, setLoading] = useState(false);
+  const [uploadStatus, setUploadStatus] = useState("");
   const [error, setError] = useState("");
 
   if (!isOpen) return null;
@@ -54,11 +61,37 @@ export default function CreateListingModal({
     if (error) setError("");
   };
 
+  const handleImageChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(file.type)) {
+      setError("Please select a JPEG, PNG, or WebP image file.");
+      return;
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      setError("Image size exceeds 5MB limit. Please choose a smaller image.");
+      return;
+    }
+
+    setImageFile(file);
+    setImagePreview(URL.createObjectURL(file));
+    setError("");
+  };
+
+  const handleRemoveImage = () => {
+    setImageFile(null);
+    setImagePreview(null);
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
 
-    // Client validation
     if (!formData.title.trim() || formData.title.trim().length < 3) {
       setError("Title must be at least 3 characters long.");
       return;
@@ -88,7 +121,16 @@ export default function CreateListingModal({
     }
 
     setLoading(true);
+    let uploadedImageUrl = null;
+
     try {
+      if (imageFile) {
+        setUploadStatus("Uploading product image...");
+        const uploadResult = await api.uploadImage(imageFile, token);
+        uploadedImageUrl = uploadResult.imageUrl;
+      }
+
+      setUploadStatus("Publishing auction listing...");
       await onSubmit({
         title: formData.title.trim(),
         description: formData.description.trim(),
@@ -97,12 +139,16 @@ export default function CreateListingModal({
         startingPrice: price,
         minBidIncrement: increment,
         auctionEndTime: selectedEndTime.toISOString(),
+        imageUrl: uploadedImageUrl,
       });
+
+      handleRemoveImage();
       onClose();
     } catch (err) {
       setError(err.message || "Failed to create listing. Please try again.");
     } finally {
       setLoading(false);
+      setUploadStatus("");
     }
   };
 
@@ -169,6 +215,55 @@ export default function CreateListingModal({
           <form onSubmit={handleSubmit}>
             <div className="modal-body">
               {error && <div className="alert alert-danger mb-3">{error}</div>}
+
+              {/* Product Image Upload Section */}
+              <div className="form-group">
+                <label className="form-label">Product Image (Optional)</label>
+                <div className="image-upload-wrapper">
+                  {imagePreview ? (
+                    <div className="image-preview-box">
+                      <img
+                        src={imagePreview}
+                        alt="Product Preview"
+                        className="uploaded-image-preview"
+                      />
+                      <div className="image-preview-actions">
+                        <button
+                          type="button"
+                          className="btn btn-outline btn-sm"
+                          onClick={() => fileInputRef.current?.click()}
+                        >
+                          Replace Image
+                        </button>
+                        <button
+                          type="button"
+                          className="btn btn-danger-outline btn-sm"
+                          onClick={handleRemoveImage}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div
+                      className="image-dropzone"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      <span className="dropzone-icon">📷</span>
+                      <p className="dropzone-text">Click to choose a product photo</p>
+                      <span className="dropzone-sub">Supports JPEG, PNG, WebP (Max 5MB)</span>
+                    </div>
+                  )}
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    className="hidden-file-input"
+                    onChange={handleImageChange}
+                  />
+                </div>
+              </div>
 
               <div className="form-group">
                 <label className="form-label" htmlFor="title">
@@ -310,7 +405,7 @@ export default function CreateListingModal({
                 className="btn btn-primary"
                 disabled={loading}
               >
-                {loading ? "Publishing Listing..." : "Publish Auction"}
+                {loading ? uploadStatus || "Publishing Auction..." : "Publish Auction"}
               </button>
             </div>
           </form>

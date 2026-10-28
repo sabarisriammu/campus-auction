@@ -17,17 +17,19 @@ export default function ListingDetailsModal({
   const [loadingBids, setLoadingBids] = useState(true);
   const [bidAmount, setBidAmount] = useState("");
   const [submittingBid, setSubmittingBid] = useState(false);
+  const [closingAuction, setClosingAuction] = useState(false);
   const [bidError, setBidError] = useState("");
   const [bidSuccess, setBidSuccess] = useState("");
+  const [currentListing, setCurrentListing] = useState(listing);
   const [currentPrice, setCurrentPrice] = useState(
     listing?.currentPrice || listing?.startingPrice || 0
   );
 
   const fetchBids = useCallback(async () => {
-    if (!listing?._id) return;
+    if (!currentListing?._id) return;
     try {
       setLoadingBids(true);
-      const data = await api.getListingBids(listing._id);
+      const data = await api.getListingBids(currentListing._id);
       setBids(data.bids || []);
       if (data.currentPrice) {
         setCurrentPrice(data.currentPrice);
@@ -37,13 +39,13 @@ export default function ListingDetailsModal({
     } finally {
       setLoadingBids(false);
     }
-  }, [listing?._id]);
+  }, [currentListing?._id]);
 
   useEffect(() => {
     fetchBids();
   }, [fetchBids]);
 
-  if (!listing) return null;
+  if (!currentListing) return null;
 
   const {
     _id,
@@ -52,14 +54,24 @@ export default function ListingDetailsModal({
     category,
     condition,
     startingPrice,
+    finalPrice,
     minBidIncrement,
     auctionEndTime,
     seller,
+    winner,
     status,
+    outcome,
+    imageUrl,
+    completionTime,
     createdAt,
-  } = listing;
+  } = currentListing;
 
   const isCancelled = status === "cancelled";
+  const isCompleted = status === "completed";
+  const isSold = isCompleted && outcome === "sold";
+  const isUnsold = isCompleted && outcome === "unsold";
+  const isExpired = new Date(auctionEndTime) <= new Date();
+
   const sellerId = typeof seller === "object" ? seller?._id : seller;
   const isOwner = user && sellerId && user.id === sellerId.toString();
   const isAdmin = user && user.role === "admin";
@@ -67,7 +79,6 @@ export default function ListingDetailsModal({
   const isBuyer = user && user.role === "buyer";
 
   const canManage = (isOwner && isSeller) || isAdmin;
-  const isExpired = new Date(auctionEndTime) <= new Date();
 
   // Next required bid amount calculation
   const minIncrement = Number(minBidIncrement) || 1.0;
@@ -76,7 +87,8 @@ export default function ListingDetailsModal({
       ? Number(startingPrice)
       : Number((currentPrice + minIncrement).toFixed(2));
 
-  const canBid = isBuyer && !isOwner && !isCancelled && !isExpired;
+  const canBid =
+    isBuyer && !isOwner && status === "active" && !isExpired && !isCompleted && !isCancelled;
 
   const formattedEndDate = new Date(auctionEndTime).toLocaleString(undefined, {
     weekday: "short",
@@ -92,6 +104,21 @@ export default function ListingDetailsModal({
     month: "short",
     day: "numeric",
   });
+
+  const formattedCompletionDate = completionTime
+    ? new Date(completionTime).toLocaleString(undefined, {
+        month: "short",
+        day: "numeric",
+        hour: "2-digit",
+        minute: "2-digit",
+      })
+    : null;
+
+  const imageSrc = imageUrl
+    ? imageUrl.startsWith("http")
+      ? imageUrl
+      : `http://localhost:5000${imageUrl}`
+    : null;
 
   const handleBidSubmit = async (e) => {
     e.preventDefault();
@@ -125,9 +152,24 @@ export default function ListingDetailsModal({
       }
     } catch (err) {
       setBidError(err.message || "Failed to place bid. Please try again.");
-      fetchBids(); // Refresh latest state on error
+      fetchBids();
     } finally {
       setSubmittingBid(false);
+    }
+  };
+
+  const handleCloseAuction = async () => {
+    setClosingAuction(true);
+    try {
+      const data = await api.closeAuction(_id, token);
+      setCurrentListing(data.listing);
+      if (onBidSuccess) {
+        onBidSuccess(_id, data.listing.currentPrice);
+      }
+    } catch (err) {
+      setBidError(err.message || "Failed to close auction.");
+    } finally {
+      setClosingAuction(false);
     }
   };
 
@@ -145,18 +187,70 @@ export default function ListingDetailsModal({
         </div>
 
         <div className="modal-body">
-          {/* Status Banners */}
-          {isCancelled && (
-            <div className="alert alert-danger mb-3">
-              ⚠️ This listing has been cancelled by the seller and is no longer accepting bids.
+          {/* Lifecycle Status Banners */}
+          {isSold && (
+            <div className="alert alert-success mb-3 outcome-banner">
+              <span className="outcome-icon">🏆</span>
+              <div>
+                <strong>Auction Completed — Sold!</strong>
+                <p className="outcome-desc">
+                  Won by <strong>{winner?.name || "Winning Bidder"}</strong> for{" "}
+                  <strong>${Number(finalPrice || currentPrice).toFixed(2)}</strong> on{" "}
+                  {formattedCompletionDate}.
+                </p>
+              </div>
             </div>
           )}
 
-          {isExpired && !isCancelled && (
-            <div className="alert alert-warning mb-3">
-              ⏳ This auction has ended. No new bids can be accepted.
+          {isUnsold && (
+            <div className="alert alert-warning mb-3 outcome-banner">
+              <span className="outcome-icon">📦</span>
+              <div>
+                <strong>Auction Ended — Unsold</strong>
+                <p className="outcome-desc">
+                  This auction concluded without receiving any valid bids before its deadline.
+                </p>
+              </div>
             </div>
           )}
+
+          {isCancelled && (
+            <div className="alert alert-danger mb-3 outcome-banner">
+              <span className="outcome-icon">⚠️</span>
+              <div>
+                <strong>Auction Cancelled</strong>
+                <p className="outcome-desc">
+                  This listing was cancelled by the seller and is no longer accepting bids.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {!isCompleted && !isCancelled && isExpired && (
+            <div className="alert alert-warning mb-3 outcome-banner">
+              <span className="outcome-icon">⏳</span>
+              <div>
+                <strong>Auction Deadline Passed</strong>
+                <p className="outcome-desc">
+                  The bidding window has ended. Outcome is being finalized.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* Product Image Section */}
+          <div className="details-hero-image-wrapper">
+            {imageSrc ? (
+              <img src={imageSrc} alt={title} className="details-hero-image" />
+            ) : (
+              <div className="details-image-placeholder">
+                <span className="details-placeholder-icon">📷</span>
+                <span className="details-placeholder-text">
+                  No product image provided for this item
+                </span>
+              </div>
+            )}
+          </div>
 
           {/* Core Info Grid */}
           <div className="details-grid">
@@ -225,7 +319,9 @@ export default function ListingDetailsModal({
                               {b.bidder?.name || "Campus Buyer"}
                             </span>
                             {index === 0 && (
-                              <span className="badge badge-green ml-2">Highest Bidder</span>
+                              <span className="badge badge-green ml-2">
+                                {isSold ? "Winner" : "Highest Bidder"}
+                              </span>
                             )}
                             <div className="bid-row-time">
                               {new Date(b.createdAt).toLocaleString(undefined, {
@@ -250,9 +346,11 @@ export default function ListingDetailsModal({
             <div className="details-sidebar">
               <div className="price-card">
                 <div className="price-card-header">
-                  <span className="price-label">Current Bid</span>
+                  <span className="price-label">
+                    {isSold ? "Final Winning Price" : "Current Bid"}
+                  </span>
                   <span className="price-highlight">
-                    ${Number(currentPrice).toFixed(2)}
+                    ${Number(isSold ? finalPrice || currentPrice : currentPrice).toFixed(2)}
                   </span>
                 </div>
 
@@ -265,14 +363,16 @@ export default function ListingDetailsModal({
                     <span>Min Bid Increment:</span>
                     <span>+${Number(minIncrement).toFixed(2)}</span>
                   </div>
+                  {!isCompleted && !isCancelled && (
+                    <div className="price-detail-row">
+                      <span>Next Minimum Bid:</span>
+                      <span className="text-primary font-bold">
+                        ${Number(nextMinBid).toFixed(2)}
+                      </span>
+                    </div>
+                  )}
                   <div className="price-detail-row">
-                    <span>Next Minimum Bid:</span>
-                    <span className="text-primary font-bold">
-                      ${Number(nextMinBid).toFixed(2)}
-                    </span>
-                  </div>
-                  <div className="price-detail-row">
-                    <span>Auction Ends:</span>
+                    <span>Auction Deadline:</span>
                     <span>{formattedEndDate}</span>
                   </div>
                 </div>
@@ -326,7 +426,7 @@ export default function ListingDetailsModal({
                 )}
 
                 {/* Role & Auth Notices */}
-                {!user && !isCancelled && !isExpired && (
+                {!user && status === "active" && !isExpired && (
                   <div className="bidding-placeholder-box">
                     <span className="placeholder-icon">🔒</span>
                     <p className="placeholder-title">Sign in to Bid</p>
@@ -345,7 +445,7 @@ export default function ListingDetailsModal({
                   </div>
                 )}
 
-                {user && isSeller && !isOwner && !isCancelled && !isExpired && (
+                {user && isSeller && !isOwner && status === "active" && !isExpired && (
                   <div className="bidding-placeholder-box">
                     <span className="placeholder-icon">🏷️</span>
                     <p className="placeholder-title">Seller Account</p>
@@ -355,67 +455,65 @@ export default function ListingDetailsModal({
                   </div>
                 )}
 
-                {user && isAdmin && (
-                  <div className="bidding-placeholder-box">
-                    <span className="placeholder-icon">🛡️</span>
-                    <p className="placeholder-title">Administrator View</p>
-                    <p className="placeholder-sub">
-                      Admins monitor auctions and enforce community standards.
+                {/* Explicit Closure Action for Expired Active Auction (Owner or Admin) */}
+                {canManage && status === "active" && isExpired && (
+                  <div className="close-auction-box mt-3">
+                    <p className="text-sm font-semibold mb-2">
+                      Auction deadline has passed. Settle this auction to determine the outcome.
                     </p>
+                    <button
+                      className="btn btn-primary btn-block"
+                      onClick={handleCloseAuction}
+                      disabled={closingAuction}
+                    >
+                      {closingAuction ? "Settling Auction..." : "🏁 Settle & Close Auction"}
+                    </button>
                   </div>
                 )}
 
-                {/* Owner & Admin controls */}
-                {canManage && (
+                {/* Owner & Admin Management controls */}
+                {canManage && status === "active" && !isExpired && (
                   <div className="owner-actions-box">
                     <div className="owner-header">
                       <span>{isAdmin ? "🛡️ Admin Controls" : "⚙️ Owner Controls"}</span>
                     </div>
 
-                    {!isCancelled && !isExpired ? (
-                      <>
-                        <button
-                          className="btn btn-primary btn-block mb-2"
-                          onClick={() => onEdit(listing)}
-                        >
-                          ✏️ Edit Listing
-                        </button>
+                    <button
+                      className="btn btn-primary btn-block mb-2"
+                      onClick={() => onEdit(currentListing)}
+                    >
+                      ✏️ Edit Listing
+                    </button>
 
-                        {!showConfirmCancel ? (
-                          <button
-                            className="btn btn-danger-outline btn-block"
-                            onClick={() => setShowConfirmCancel(true)}
-                          >
-                            🚫 Cancel Listing
-                          </button>
-                        ) : (
-                          <div className="confirm-cancel-box">
-                            <p className="confirm-text">
-                              Are you sure you want to cancel this auction?
-                            </p>
-                            <div className="confirm-buttons">
-                              <button
-                                className="btn btn-danger btn-sm"
-                                onClick={() => onCancel(_id)}
-                                disabled={isCancelling}
-                              >
-                                {isCancelling ? "Cancelling..." : "Yes, Cancel"}
-                              </button>
-                              <button
-                                className="btn btn-outline btn-sm"
-                                onClick={() => setShowConfirmCancel(false)}
-                                disabled={isCancelling}
-                              >
-                                Keep Active
-                              </button>
-                            </div>
-                          </div>
-                        )}
-                      </>
+                    {!showConfirmCancel ? (
+                      <button
+                        className="btn btn-danger-outline btn-block"
+                        onClick={() => setShowConfirmCancel(true)}
+                      >
+                        🚫 Cancel Listing
+                      </button>
                     ) : (
-                      <p className="text-muted text-center text-sm">
-                        No actions available for {isCancelled ? "cancelled" : "ended"} auctions.
-                      </p>
+                      <div className="confirm-cancel-box">
+                        <p className="confirm-text">
+                          Are you sure you want to cancel this auction?
+                        </p>
+                        <div className="confirm-buttons">
+                          <button
+                            className="btn btn-danger btn-sm"
+                            onClick={() => onCancel(_id)}
+                            disabled={isCancelling}
+                          >
+                            {isCancelling ? "Cancelling..." : "Yes, Cancel"}
+                          </button>
+                          <button
+                            className="btn btn-outline btn-sm"
+                            onClick={() => setShowConfirmCancel(false)}
+                            disabled={isCancelling}
+                          >
+                            Keep Active
+                          </button>
+                        </div>
+                      </div>
                     )}
                   </div>
                 )}

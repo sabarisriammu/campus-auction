@@ -2,10 +2,126 @@ const express = require("express");
 const mongoose = require("mongoose");
 const Listing = require("../models/Listing");
 const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
+const upload = require("../middleware/uploadMiddleware");
+const { closeExpiredAuction, processExpiredAuctions } = require("../services/auctionService");
 
 const router = express.Router();
 
 const ALLOWED_CONDITIONS = ["New", "Like New", "Good", "Fair", "Poor"];
+
+// POST /api/listings/upload-image - Upload a product image (Protected: Sellers and Admins only)
+router.post(
+  "/upload-image",
+  authenticate,
+  authorizeRoles("seller", "admin"),
+  (req, res) => {
+    upload.single("image")(req, res, (err) => {
+      if (err) {
+        if (err.code === "LIMIT_FILE_SIZE") {
+          return res.status(400).json({
+            message: "File size exceeds 5MB limit. Please choose a smaller image.",
+          });
+        }
+        return res.status(400).json({
+          message: err.message || "Failed to upload image.",
+        });
+      }
+
+      if (!req.file) {
+        return res.status(400).json({
+          message: "No image file provided.",
+        });
+      }
+
+      // Return local upload path
+      const imageUrl = `/uploads/${req.file.filename}`;
+      return res.status(200).json({
+        message: "Image uploaded successfully!",
+        imageUrl,
+      });
+    });
+  }
+);
+
+// POST /api/listings/process-expired - Batch trigger closure of all expired auctions
+router.post(
+  "/process-expired",
+  authenticate,
+  authorizeRoles("seller", "admin"),
+  async (req, res) => {
+    try {
+      const result = await processExpiredAuctions();
+      return res.status(200).json({
+        message: `Processed ${result.processedCount} expired auction(s).`,
+        ...result,
+      });
+    } catch (error) {
+      console.error("Process expired auctions error:", error.message);
+      return res.status(500).json({
+        message: "Failed to process expired auctions due to a server error.",
+      });
+    }
+  }
+);
+
+// POST /api/listings/:id/close - Explicitly close an expired auction (Protected: Owner Seller or Admin)
+router.post(
+  "/:id/close",
+  authenticate,
+  authorizeRoles("seller", "admin"),
+  async (req, res) => {
+    try {
+      const { id } = req.params;
+
+      if (!mongoose.Types.ObjectId.isValid(id)) {
+        return res.status(400).json({
+          message: "Invalid listing ID format.",
+        });
+      }
+
+      const listing = await Listing.findById(id);
+      if (!listing) {
+        return res.status(404).json({
+          message: "Listing not found.",
+        });
+      }
+
+      // Authorization: Only the listing's seller or an admin can trigger closure
+      const isOwner = listing.seller.toString() === req.user.id.toString();
+      const isAdmin = req.user.role === "admin";
+      if (!isOwner && !isAdmin) {
+        return res.status(403).json({
+          message: "You are not authorized to close this listing.",
+        });
+      }
+
+      // Cannot close before deadline
+      if (new Date(listing.auctionEndTime) > new Date()) {
+        return res.status(400).json({
+          message: "Cannot close an auction before its deadline.",
+        });
+      }
+
+      const closedListing = await closeExpiredAuction(id);
+
+      return res.status(200).json({
+        message:
+          closedListing.outcome === "sold"
+            ? "Auction closed successfully! Item has been sold."
+            : "Auction closed successfully. Item ended unsold.",
+        listing: closedListing,
+      });
+    } catch (error) {
+      if (error.status === 400) {
+        return res.status(400).json({ message: error.message });
+      }
+      console.error("Close auction error:", error.message);
+      return res.status(500).json({
+        message: "Failed to close auction due to a server error.",
+      });
+    }
+  }
+);
 
 // POST /api/listings - Create a new listing (Protected: Sellers and Admins only)
 router.post("/", authenticate, authorizeRoles("seller", "admin"), async (req, res) => {
@@ -18,6 +134,7 @@ router.post("/", authenticate, authorizeRoles("seller", "admin"), async (req, re
       startingPrice,
       minBidIncrement,
       auctionEndTime,
+      imageUrl,
     } = req.body;
 
     // 1. Validate required fields
@@ -81,12 +198,12 @@ router.post("/", authenticate, authorizeRoles("seller", "admin"), async (req, re
       auctionEndTime: parsedEndTime,
       seller: req.user.id,
       status: "active",
+      imageUrl: imageUrl && typeof imageUrl === "string" ? imageUrl.trim() : null,
     });
 
-    const populatedListing = await Listing.findById(newListing._id).populate(
-      "seller",
-      "name email role"
-    );
+    const populatedListing = await Listing.findById(newListing._id)
+      .populate("seller", "name email role")
+      .populate("winner", "name email role");
 
     return res.status(201).json({
       message: "Listing created successfully!",
@@ -132,8 +249,14 @@ router.get("/", async (req, res) => {
       ];
     }
 
+    // If querying active listings, first lazily close any that have passed deadline
+    if (query.status === "active") {
+      await processExpiredAuctions();
+    }
+
     const listings = await Listing.find(query)
       .populate("seller", "name email role")
+      .populate("winner", "name email role")
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -159,12 +282,19 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    const listing = await Listing.findById(id).populate("seller", "name email role");
+    let listing = await Listing.findById(id)
+      .populate("seller", "name email role")
+      .populate("winner", "name email role");
 
     if (!listing) {
       return res.status(404).json({
         message: "Listing not found.",
       });
+    }
+
+    // On-the-fly resolution: if active auction passed its deadline, close it immediately
+    if (listing.status === "active" && new Date(listing.auctionEndTime) <= new Date()) {
+      listing = await closeExpiredAuction(id);
     }
 
     return res.status(200).json({
@@ -207,10 +337,16 @@ const handleUpdateListing = async (req, res) => {
       });
     }
 
-    // Check status: cannot edit a cancelled or expired listing
+    // Check status: cannot edit a cancelled or completed listing
     if (listing.status === "cancelled") {
       return res.status(400).json({
         message: "Cannot edit a cancelled listing.",
+      });
+    }
+
+    if (listing.status === "completed") {
+      return res.status(400).json({
+        message: "Cannot edit a completed auction.",
       });
     }
 
@@ -228,6 +364,7 @@ const handleUpdateListing = async (req, res) => {
       startingPrice,
       minBidIncrement,
       auctionEndTime,
+      imageUrl,
     } = req.body;
 
     if (title !== undefined) {
@@ -273,7 +410,6 @@ const handleUpdateListing = async (req, res) => {
           message: "Starting price must be a positive number greater than 0.",
         });
       }
-      // If current price was untouched (equals original starting price), update it as well
       if (listing.currentPrice === listing.startingPrice) {
         listing.currentPrice = parsedStartingPrice;
       }
@@ -300,12 +436,20 @@ const handleUpdateListing = async (req, res) => {
       listing.auctionEndTime = parsedEndTime;
     }
 
+    // Image URL update or removal: preserve existing if undefined
+    if (imageUrl !== undefined) {
+      if (imageUrl === null || imageUrl === "") {
+        listing.imageUrl = null;
+      } else if (typeof imageUrl === "string") {
+        listing.imageUrl = imageUrl.trim();
+      }
+    }
+
     await listing.save();
 
-    const updatedListing = await Listing.findById(listing._id).populate(
-      "seller",
-      "name email role"
-    );
+    const updatedListing = await Listing.findById(listing._id)
+      .populate("seller", "name email role")
+      .populate("winner", "name email role");
 
     return res.status(200).json({
       message: "Listing updated successfully!",
@@ -364,6 +508,12 @@ const handleCancelListing = async (req, res) => {
       });
     }
 
+    if (listing.status === "completed") {
+      return res.status(400).json({
+        message: "Cannot cancel an already completed auction.",
+      });
+    }
+
     if (new Date(listing.auctionEndTime) <= new Date()) {
       return res.status(400).json({
         message: "Cannot cancel an auction that has already ended.",
@@ -373,10 +523,9 @@ const handleCancelListing = async (req, res) => {
     listing.status = "cancelled";
     await listing.save();
 
-    const cancelledListing = await Listing.findById(listing._id).populate(
-      "seller",
-      "name email role"
-    );
+    const cancelledListing = await Listing.findById(listing._id)
+      .populate("seller", "name email role")
+      .populate("winner", "name email role");
 
     return res.status(200).json({
       message: "Listing cancelled successfully!",
