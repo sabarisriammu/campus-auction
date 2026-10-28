@@ -1,5 +1,6 @@
 import React, { useState, useRef } from "react";
 import { api } from "../services/api";
+import { XIcon, CameraIcon, EditIcon } from "./Icons";
 
 const CATEGORIES = [
   "Textbooks",
@@ -130,7 +131,7 @@ export default function EditListingModal({
     try {
       if (imageChanged) {
         if (imageFile) {
-          setUploadStatus("Uploading new image...");
+          setUploadStatus("Uploading new photo...");
           const uploadRes = await api.uploadImage(imageFile, token);
           finalImageUrl = uploadRes.imageUrl;
         } else {
@@ -138,7 +139,7 @@ export default function EditListingModal({
         }
       }
 
-      setUploadStatus("Saving listing changes...");
+      setUploadStatus("Saving listing updates...");
       await onSubmit(listing._id, {
         title: formData.title.trim(),
         description: formData.description.trim(),
@@ -152,7 +153,7 @@ export default function EditListingModal({
 
       onClose();
     } catch (err) {
-      setError(err.message || "Failed to update listing.");
+      setError(err.message || "Failed to update listing. Please try again.");
     } finally {
       setLoading(false);
       setUploadStatus("");
@@ -163,18 +164,21 @@ export default function EditListingModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">Edit Auction Listing</h2>
+          <div className="modal-header-titles">
+            <span className="listing-category-pill">Seller Console</span>
+            <h2 className="modal-title">Edit Listing Details</h2>
+          </div>
           <button className="btn-close" onClick={onClose} aria-label="Close modal">
-            ✕
+            <XIcon size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="modal-form">
           <div className="modal-body">
             {error && <div className="alert alert-danger mb-3">{error}</div>}
 
-            {/* Product Image Edit Section */}
-            <div className="form-group">
+            {/* Product Image Section */}
+            <div className="form-group mb-3">
               <label className="form-label">Product Image</label>
               <div className="image-upload-wrapper">
                 {imagePreview ? (
@@ -190,14 +194,14 @@ export default function EditListingModal({
                         className="btn btn-outline btn-sm"
                         onClick={() => fileInputRef.current?.click()}
                       >
-                        Replace Image
+                        Change Photo
                       </button>
                       <button
                         type="button"
                         className="btn btn-danger-outline btn-sm"
                         onClick={handleRemoveImage}
                       >
-                        Remove Image
+                        Remove Photo
                       </button>
                     </div>
                   </div>
@@ -206,8 +210,8 @@ export default function EditListingModal({
                     className="image-dropzone"
                     onClick={() => fileInputRef.current?.click()}
                   >
-                    <span className="dropzone-icon">📷</span>
-                    <p className="dropzone-text">Click to attach a product photo</p>
+                    <CameraIcon size={28} className="dropzone-icon" />
+                    <p className="dropzone-text">Click to upload product photo</p>
                     <span className="dropzone-sub">Supports JPEG, PNG, WebP (Max 5MB)</span>
                   </div>
                 )}
@@ -222,7 +226,7 @@ export default function EditListingModal({
               </div>
             </div>
 
-            <div className="form-group">
+            <div className="form-group mb-3">
               <label className="form-label" htmlFor="edit-title">
                 Item Title *
               </label>
@@ -237,49 +241,9 @@ export default function EditListingModal({
               />
             </div>
 
-            <div className="form-row">
-              <div className="form-group col-half">
-                <label className="form-label" htmlFor="edit-category">
-                  Category *
-                </label>
-                <select
-                  id="edit-category"
-                  name="category"
-                  className="form-control"
-                  value={formData.category}
-                  onChange={handleChange}
-                >
-                  {CATEGORIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="form-group col-half">
-                <label className="form-label" htmlFor="edit-condition">
-                  Condition *
-                </label>
-                <select
-                  id="edit-condition"
-                  name="condition"
-                  className="form-control"
-                  value={formData.condition}
-                  onChange={handleChange}
-                >
-                  {CONDITIONS.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-              </div>
-            </div>
-
-            <div className="form-group">
+            <div className="form-group mb-3">
               <label className="form-label" htmlFor="edit-description">
-                Description *
+                Description & Pickup Notes *
               </label>
               <textarea
                 id="edit-description"
@@ -292,44 +256,91 @@ export default function EditListingModal({
               />
             </div>
 
-            <div className="form-row">
-              <div className="form-group col-half">
-                <label className="form-label" htmlFor="edit-startingPrice">
-                  Starting Price (₹) *
+            <div className="form-row-2 mb-3">
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-category">
+                  Category *
                 </label>
-                <input
-                  id="edit-startingPrice"
-                  type="number"
-                  name="startingPrice"
+                <select
+                  id="edit-category"
+                  name="category"
                   className="form-control"
-                  step="0.01"
-                  min="0.01"
-                  value={formData.startingPrice}
+                  value={formData.category}
                   onChange={handleChange}
-                  required
-                />
+                >
+                  {CATEGORIES.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
               </div>
 
-              <div className="form-group col-half">
-                <label className="form-label" htmlFor="edit-minBidIncrement">
-                  Min Bid Increment (₹)
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-condition">
+                  Condition *
                 </label>
-                <input
-                  id="edit-minBidIncrement"
-                  type="number"
-                  name="minBidIncrement"
+                <select
+                  id="edit-condition"
+                  name="condition"
                   className="form-control"
-                  step="0.01"
-                  min="0.01"
-                  value={formData.minBidIncrement}
+                  value={formData.condition}
                   onChange={handleChange}
-                />
+                >
+                  {CONDITIONS.map((cond) => (
+                    <option key={cond} value={cond}>
+                      {cond}
+                    </option>
+                  ))}
+                </select>
               </div>
             </div>
 
-            <div className="form-group">
+            <div className="form-row-2 mb-3">
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-startingPrice">
+                  Starting Price (₹) *
+                </label>
+                <div className="bid-input-wrapper">
+                  <span className="bid-currency-symbol">₹</span>
+                  <input
+                    id="edit-startingPrice"
+                    type="number"
+                    name="startingPrice"
+                    className="form-control bid-input font-mono"
+                    step="0.01"
+                    min="0.01"
+                    value={formData.startingPrice}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+
+              <div className="form-group">
+                <label className="form-label" htmlFor="edit-minBidIncrement">
+                  Min Increment (₹) *
+                </label>
+                <div className="bid-input-wrapper">
+                  <span className="bid-currency-symbol">₹</span>
+                  <input
+                    id="edit-minBidIncrement"
+                    type="number"
+                    name="minBidIncrement"
+                    className="form-control bid-input font-mono"
+                    step="0.01"
+                    min="0.01"
+                    value={formData.minBidIncrement}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="form-group mb-3">
               <label className="form-label" htmlFor="edit-auctionEndTime">
-                Auction End Date & Time *
+                Auction Deadline *
               </label>
               <input
                 id="edit-auctionEndTime"
@@ -357,7 +368,7 @@ export default function EditListingModal({
               className="btn btn-primary"
               disabled={loading}
             >
-              {loading ? uploadStatus || "Saving Changes..." : "Save Changes"}
+              {loading ? uploadStatus || "Saving..." : "Save Changes"}
             </button>
           </div>
         </form>

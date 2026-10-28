@@ -1,19 +1,15 @@
 import React, { useState, useEffect, useRef } from "react";
 import { api } from "../services/api";
-
-const NOTIFICATION_ICONS = {
-  NEW_BID: "🏷️",
-  OUTBID: "⚡",
-  AUCTION_WON: "🏆",
-  AUCTION_SOLD: "💰",
-  AUCTION_UNSOLD: "📦",
-  HANDOVER_STARTED: "📍",
-  HANDOVER_SELLER_CONFIRMED: "🚚",
-  HANDOVER_BUYER_CONFIRMED: "📦",
-  HANDOVER_COMPLETED: "🎉",
-  HANDOVER_DISPUTED: "⚠️",
-  HANDOVER_RESOLVED: "✅",
-};
+import {
+  BellIcon,
+  GavelIcon,
+  TrophyIcon,
+  PackageIcon,
+  HandshakeIcon,
+  AlertTriangleIcon,
+  CheckCircleIcon,
+  RefreshIcon,
+} from "./Icons";
 
 export default function NotificationDropdown({
   token,
@@ -120,6 +116,51 @@ export default function NotificationDropdown({
     return date.toLocaleDateString(undefined, { month: "short", day: "numeric" });
   };
 
+  const renderNotifIcon = (type) => {
+    switch (type) {
+      case "NEW_BID":
+      case "OUTBID":
+        return (
+          <div className="notif-avatar notif-avatar-amber">
+            <GavelIcon size={14} />
+          </div>
+        );
+      case "AUCTION_WON":
+        return (
+          <div className="notif-avatar notif-avatar-emerald">
+            <TrophyIcon size={14} />
+          </div>
+        );
+      case "AUCTION_SOLD":
+      case "HANDOVER_COMPLETED":
+        return (
+          <div className="notif-avatar notif-avatar-emerald">
+            <CheckCircleIcon size={14} />
+          </div>
+        );
+      case "HANDOVER_STARTED":
+      case "HANDOVER_SELLER_CONFIRMED":
+      case "HANDOVER_BUYER_CONFIRMED":
+        return (
+          <div className="notif-avatar notif-avatar-blue">
+            <HandshakeIcon size={14} />
+          </div>
+        );
+      case "HANDOVER_DISPUTED":
+        return (
+          <div className="notif-avatar notif-avatar-red">
+            <AlertTriangleIcon size={14} />
+          </div>
+        );
+      default:
+        return (
+          <div className="notif-avatar notif-avatar-slate">
+            <PackageIcon size={14} />
+          </div>
+        );
+    }
+  };
+
   const displayedNotifications = filterUnread
     ? notifications.filter((n) => !n.isRead)
     : notifications;
@@ -128,12 +169,12 @@ export default function NotificationDropdown({
     <div className="notification-wrapper" ref={dropdownRef}>
       {/* Bell Button */}
       <button
-        className="notification-bell-btn"
+        className={`notification-bell-btn ${isOpen ? "active" : ""}`}
         onClick={handleToggle}
         aria-label="View notifications"
         title="Notifications"
       >
-        <span className="bell-icon">🔔</span>
+        <BellIcon size={18} />
         {unreadCount > 0 && (
           <span className="notification-badge">
             {unreadCount > 99 ? "99+" : unreadCount}
@@ -146,7 +187,7 @@ export default function NotificationDropdown({
         <div className="notification-dropdown">
           <div className="notification-header">
             <div className="notification-header-title">
-              <h4>Notifications</h4>
+              <h4>Activity & Alerts</h4>
               {unreadCount > 0 && (
                 <span className="header-count-pill">{unreadCount} new</span>
               )}
@@ -183,52 +224,52 @@ export default function NotificationDropdown({
             {loading && notifications.length === 0 ? (
               <div className="notification-loading">
                 <div className="spinner-sm"></div>
-                <span>Loading notifications...</span>
+                <span>Checking live updates...</span>
               </div>
             ) : displayedNotifications.length === 0 ? (
               <div className="notification-empty">
-                <span className="empty-bell">🔕</span>
-                <p>
+                <div className="empty-bell-icon">
+                  <BellIcon size={28} />
+                </div>
+                <p className="empty-title">All caught up</p>
+                <p className="empty-desc">
                   {filterUnread
-                    ? "No unread notifications."
-                    : "No notifications yet. Activity on your bids, listings, and handovers will appear here."}
+                    ? "You have no unread notifications right now."
+                    : "Activity on your bids, auctions, and handovers will appear here in real time."}
                 </p>
               </div>
             ) : (
-              displayedNotifications.map((notif) => {
-                const icon = NOTIFICATION_ICONS[notif.type] || "📢";
-                return (
-                  <div
-                    key={notif._id}
-                    className={`notification-item ${!notif.isRead ? "unread" : ""}`}
-                    onClick={() => handleNotificationClick(notif)}
-                  >
-                    <div className="notif-icon-col">
-                      <span className="notif-type-icon">{icon}</span>
-                    </div>
-
-                    <div className="notif-content-col">
-                      <div className="notif-title-row">
-                        <span className="notif-title">{notif.title}</span>
-                        <span className="notif-time">{formatTimeAgo(notif.createdAt)}</span>
-                      </div>
-                      <p className="notif-message">{notif.message}</p>
-                    </div>
-
-                    {!notif.isRead && (
-                      <div className="notif-action-col">
-                        <button
-                          className="btn-mark-single"
-                          title="Mark as read"
-                          onClick={(e) => handleMarkAsRead(e, notif)}
-                        >
-                          ●
-                        </button>
-                      </div>
-                    )}
+              displayedNotifications.map((notif) => (
+                <div
+                  key={notif._id}
+                  className={`notification-item ${!notif.isRead ? "unread" : ""}`}
+                  onClick={() => handleNotificationClick(notif)}
+                >
+                  <div className="notif-icon-col">
+                    {renderNotifIcon(notif.type)}
                   </div>
-                );
-              })
+
+                  <div className="notif-content-col">
+                    <div className="notif-title-row">
+                      <span className="notif-title">{notif.title}</span>
+                      <span className="notif-time">{formatTimeAgo(notif.createdAt)}</span>
+                    </div>
+                    <p className="notif-message">{notif.message}</p>
+                  </div>
+
+                  {!notif.isRead && (
+                    <div className="notif-action-col">
+                      <button
+                        className="btn-mark-single"
+                        title="Mark as read"
+                        onClick={(e) => handleMarkAsRead(e, notif)}
+                      >
+                        <span className="unread-dot"></span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+              ))
             )}
           </div>
 
@@ -238,7 +279,8 @@ export default function NotificationDropdown({
               onClick={fetchNotifications}
               disabled={loading}
             >
-              🔄 Refresh
+              <RefreshIcon size={13} />
+              <span>Refresh Feed</span>
             </button>
           </div>
         </div>

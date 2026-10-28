@@ -314,9 +314,18 @@ export default function App() {
       {/* Footer */}
       <footer className="footer">
         <div className="footer-container">
+          <div className="footer-brand-row">
+            <span className="footer-brand-title">Campus Auction Exchange</span>
+            <span className="footer-badge">Collegiate P2P Network</span>
+          </div>
           <p className="footer-text">
-            🎓 Campus Auction • A peer-to-peer student marketplace. All items sold locally on campus.
+            All auctions are peer-to-peer student transactions conducted on university grounds. Zero listing fees, transparent live bidding in ₹ (INR), and physical handover verification.
           </p>
+          <div className="footer-bottom-row">
+            <span>© 2026 Campus Auction Platform</span>
+            <span>•</span>
+            <span>Secure Student Handover Protocol</span>
+          </div>
         </div>
       </footer>
 

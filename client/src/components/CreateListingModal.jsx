@@ -1,5 +1,13 @@
 import React, { useState, useRef } from "react";
 import { api } from "../services/api";
+import {
+  XIcon,
+  CameraIcon,
+  PlusIcon,
+  PackageIcon,
+  TagIcon,
+  UserIcon,
+} from "./Icons";
 
 const CATEGORIES = [
   "Textbooks",
@@ -23,12 +31,6 @@ export default function CreateListingModal({
 }) {
   const getDefaultEndTime = () => {
     const d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
-    d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
-    return d.toISOString().slice(0, 16);
-  };
-
-  const getMinEndTime = () => {
-    const d = new Date(Date.now() + 10 * 60 * 1000);
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
     return d.toISOString().slice(0, 16);
   };
@@ -125,12 +127,12 @@ export default function CreateListingModal({
 
     try {
       if (imageFile) {
-        setUploadStatus("Uploading product image...");
+        setUploadStatus("Uploading item photo...");
         const uploadResult = await api.uploadImage(imageFile, token);
         uploadedImageUrl = uploadResult.imageUrl;
       }
 
-      setUploadStatus("Publishing auction listing...");
+      setUploadStatus("Creating auction listing...");
       await onSubmit({
         title: formData.title.trim(),
         description: formData.description.trim(),
@@ -156,15 +158,20 @@ export default function CreateListingModal({
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal-content" onClick={(e) => e.stopPropagation()}>
         <div className="modal-header">
-          <h2 className="modal-title">List an Item for Auction</h2>
+          <div className="modal-header-titles">
+            <span className="listing-category-pill">Seller Console</span>
+            <h2 className="modal-title">List an Item for Auction</h2>
+          </div>
           <button className="btn-close" onClick={onClose} aria-label="Close modal">
-            ✕
+            <XIcon size={18} />
           </button>
         </div>
 
         {!user ? (
           <div className="modal-body auth-prompt-box">
-            <span className="auth-prompt-icon">🔒</span>
+            <div className="auth-prompt-icon-wrapper">
+              <UserIcon size={32} />
+            </div>
             <h3>Authentication Required</h3>
             <p>You need to sign in to your campus account to create an auction listing.</p>
             <div className="auth-prompt-buttons">
@@ -190,7 +197,9 @@ export default function CreateListingModal({
           </div>
         ) : isBuyer ? (
           <div className="modal-body auth-prompt-box">
-            <span className="auth-prompt-icon">🏷️</span>
+            <div className="auth-prompt-icon-wrapper warning">
+              <TagIcon size={32} />
+            </div>
             <h3>Seller Role Required</h3>
             <p>
               You are currently signed in with a <strong>Buyer</strong> account.
@@ -212,13 +221,13 @@ export default function CreateListingModal({
             </div>
           </div>
         ) : (
-          <form onSubmit={handleSubmit}>
+          <form onSubmit={handleSubmit} className="modal-form">
             <div className="modal-body">
               {error && <div className="alert alert-danger mb-3">{error}</div>}
 
               {/* Product Image Upload Section */}
-              <div className="form-group">
-                <label className="form-label">Product Image (Optional)</label>
+              <div className="form-group mb-3">
+                <label className="form-label">Item Photo (Optional)</label>
                 <div className="image-upload-wrapper">
                   {imagePreview ? (
                     <div className="image-preview-box">
@@ -233,7 +242,7 @@ export default function CreateListingModal({
                           className="btn btn-outline btn-sm"
                           onClick={() => fileInputRef.current?.click()}
                         >
-                          Replace Image
+                          Replace Photo
                         </button>
                         <button
                           type="button"
@@ -249,9 +258,9 @@ export default function CreateListingModal({
                       className="image-dropzone"
                       onClick={() => fileInputRef.current?.click()}
                     >
-                      <span className="dropzone-icon">📷</span>
-                      <p className="dropzone-text">Click to choose a product photo</p>
-                      <span className="dropzone-sub">Supports JPEG, PNG, WebP (Max 5MB)</span>
+                      <CameraIcon size={28} className="dropzone-icon" />
+                      <p className="dropzone-text">Click to upload an item photo</p>
+                      <span className="dropzone-sub">JPEG, PNG, WebP up to 5MB</span>
                     </div>
                   )}
 
@@ -265,7 +274,7 @@ export default function CreateListingModal({
                 </div>
               </div>
 
-              <div className="form-group">
+              <div className="form-group mb-3">
                 <label className="form-label" htmlFor="title">
                   Item Title *
                 </label>
@@ -274,15 +283,31 @@ export default function CreateListingModal({
                   type="text"
                   name="title"
                   className="form-control"
-                  placeholder="e.g. Organic Chemistry 6th Ed + Solutions Manual"
+                  placeholder="e.g. iPad Air 5th Gen (64GB, Space Gray)"
                   value={formData.title}
                   onChange={handleChange}
                   required
                 />
               </div>
 
-              <div className="form-row">
-                <div className="form-group col-half">
+              <div className="form-group mb-3">
+                <label className="form-label" htmlFor="description">
+                  Description & Condition Notes *
+                </label>
+                <textarea
+                  id="description"
+                  name="description"
+                  className="form-control"
+                  rows="3"
+                  placeholder="Describe the item condition, accessories included, and campus pickup details..."
+                  value={formData.description}
+                  onChange={handleChange}
+                  required
+                />
+              </div>
+
+              <div className="form-row-2 mb-3">
+                <div className="form-group">
                   <label className="form-label" htmlFor="category">
                     Category *
                   </label>
@@ -293,15 +318,15 @@ export default function CreateListingModal({
                     value={formData.category}
                     onChange={handleChange}
                   >
-                    {CATEGORIES.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                    {CATEGORIES.map((cat) => (
+                      <option key={cat} value={cat}>
+                        {cat}
                       </option>
                     ))}
                   </select>
                 </div>
 
-                <div className="form-group col-half">
+                <div className="form-group">
                   <label className="form-label" htmlFor="condition">
                     Condition *
                   </label>
@@ -312,82 +337,75 @@ export default function CreateListingModal({
                     value={formData.condition}
                     onChange={handleChange}
                   >
-                    {CONDITIONS.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
+                    {CONDITIONS.map((cond) => (
+                      <option key={cond} value={cond}>
+                        {cond}
                       </option>
                     ))}
                   </select>
                 </div>
               </div>
 
-              <div className="form-group">
-                <label className="form-label" htmlFor="description">
-                  Description *
-                </label>
-                <textarea
-                  id="description"
-                  name="description"
-                  className="form-control"
-                  rows="3"
-                  placeholder="Describe condition, pickup locations on campus, included accessories..."
-                  value={formData.description}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
-
-              <div className="form-row">
-                <div className="form-group col-half">
+              <div className="form-row-2 mb-3">
+                <div className="form-group">
                   <label className="form-label" htmlFor="startingPrice">
                     Starting Price (₹) *
                   </label>
-                  <input
-                    id="startingPrice"
-                    type="number"
-                    name="startingPrice"
-                    className="form-control"
-                    placeholder="e.g. 500.00"
-                    step="0.01"
-                    min="0.01"
-                    value={formData.startingPrice}
-                    onChange={handleChange}
-                    required
-                  />
+                  <div className="bid-input-wrapper">
+                    <span className="bid-currency-symbol">₹</span>
+                    <input
+                      id="startingPrice"
+                      type="number"
+                      name="startingPrice"
+                      className="form-control bid-input font-mono"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="500.00"
+                      value={formData.startingPrice}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
                 </div>
 
-                <div className="form-group col-half">
+                <div className="form-group">
                   <label className="form-label" htmlFor="minBidIncrement">
-                    Min Bid Increment (₹)
+                    Min Increment (₹) *
                   </label>
-                  <input
-                    id="minBidIncrement"
-                    type="number"
-                    name="minBidIncrement"
-                    className="form-control"
-                    placeholder="e.g. 20.00"
-                    step="0.01"
-                    min="0.01"
-                    value={formData.minBidIncrement}
-                    onChange={handleChange}
-                  />
+                  <div className="bid-input-wrapper">
+                    <span className="bid-currency-symbol">₹</span>
+                    <input
+                      id="minBidIncrement"
+                      type="number"
+                      name="minBidIncrement"
+                      className="form-control bid-input font-mono"
+                      step="0.01"
+                      min="0.01"
+                      placeholder="10.00"
+                      value={formData.minBidIncrement}
+                      onChange={handleChange}
+                      required
+                    />
+                  </div>
                 </div>
               </div>
 
-              <div className="form-group">
+              <div className="form-group mb-3">
                 <label className="form-label" htmlFor="auctionEndTime">
-                  Auction End Date & Time *
+                  Auction End Deadline *
                 </label>
                 <input
                   id="auctionEndTime"
                   type="datetime-local"
                   name="auctionEndTime"
                   className="form-control"
-                  min={getMinEndTime()}
                   value={formData.auctionEndTime}
                   onChange={handleChange}
                   required
                 />
+                <small className="form-text text-muted">
+                  Bids are locked and the highest bidder wins automatically at this deadline.
+                </small>
               </div>
             </div>
 
@@ -405,7 +423,7 @@ export default function CreateListingModal({
                 className="btn btn-primary"
                 disabled={loading}
               >
-                {loading ? uploadStatus || "Publishing Auction..." : "Publish Auction"}
+                {loading ? uploadStatus || "Publishing..." : "Publish Auction"}
               </button>
             </div>
           </form>

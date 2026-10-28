@@ -1,5 +1,6 @@
 import React from "react";
 import NotificationDropdown from "./NotificationDropdown";
+import { GavelIcon, HandshakeIcon, PlusIcon, UserIcon, ShieldCheckIcon } from "./Icons";
 
 export default function Navbar({
   user,
@@ -20,36 +21,56 @@ export default function Navbar({
   const getRoleBadge = (role) => {
     switch (role) {
       case "admin":
-        return <span className="role-pill role-pill-admin">Admin</span>;
+        return (
+          <span className="role-pill role-pill-admin">
+            <ShieldCheckIcon size={12} />
+            <span>Admin</span>
+          </span>
+        );
       case "seller":
-        return <span className="role-pill role-pill-seller">Seller</span>;
+        return (
+          <span className="role-pill role-pill-seller">
+            <span>Seller</span>
+          </span>
+        );
       default:
-        return <span className="role-pill role-pill-buyer">Buyer</span>;
+        return (
+          <span className="role-pill role-pill-buyer">
+            <span>Buyer</span>
+          </span>
+        );
     }
   };
 
   return (
     <header className="navbar">
       <div className="navbar-container">
+        {/* Brand Crest & Identity */}
         <div
           className="navbar-brand"
           onClick={() => setActiveTab("browse")}
           role="button"
           tabIndex={0}
+          title="Campus Auction - Home"
         >
-          <span className="brand-icon">🎓</span>
+          <div className="brand-crest">
+            <GavelIcon size={22} className="brand-crest-icon" />
+          </div>
           <div className="brand-text">
-            <span className="brand-title">Campus Auction</span>
-            <span className="brand-subtitle">Student Marketplace • 🇮🇳</span>
+            <span className="brand-title">
+              Campus<span className="brand-accent">Auction</span>
+            </span>
+            <span className="brand-subtitle">Verified College Exchange</span>
           </div>
         </div>
 
+        {/* Center / Navigation Links */}
         <nav className="navbar-links">
           <button
             className={`nav-link ${activeTab === "browse" ? "active" : ""}`}
             onClick={() => setActiveTab("browse")}
           >
-            Browse Auctions
+            <span>Live Marketplace</span>
           </button>
 
           {user && (
@@ -57,19 +78,22 @@ export default function Navbar({
               className={`nav-link ${activeTab === "transactions" ? "active" : ""}`}
               onClick={() => setActiveTab("transactions")}
             >
-              🤝 My Handover
+              <HandshakeIcon size={16} className="nav-link-icon" />
+              <span>My Handover</span>
             </button>
           )}
 
           <button
             className="btn btn-primary btn-create"
             onClick={onOpenCreate}
-            title={user?.role === "buyer" ? "Sellers only" : "Create new auction"}
+            title={user?.role === "buyer" ? "Sellers only" : "Create new auction listing"}
           >
-            <span>+</span> List an Item
+            <PlusIcon size={16} />
+            <span>List Item</span>
           </button>
         </nav>
 
+        {/* User Profile & Actions */}
         <div className="navbar-user">
           {user ? (
             <div className="user-profile-wrapper">
@@ -83,16 +107,20 @@ export default function Navbar({
                 fetchNotifications={fetchNotifications}
                 onNavigate={onNavigate}
               />
-              <div className="user-profile">
-                <div className="user-badge" title={`${user.email} (${user.role || "buyer"})`}>
-                  <span className="user-avatar">
+
+              <div className="user-profile-card">
+                <div className="user-avatar-badge" title={`${user.email} (${user.role || "buyer"})`}>
+                  <div className="user-avatar-circle">
                     {user.name ? user.name.charAt(0).toUpperCase() : "U"}
-                  </span>
-                  <span className="user-name">{user.name}</span>
-                  {getRoleBadge(user.role)}
+                  </div>
+                  <div className="user-info-col">
+                    <span className="user-name">{user.name}</span>
+                    {getRoleBadge(user.role)}
+                  </div>
                 </div>
+
                 <button
-                  className="btn btn-outline btn-sm"
+                  className="btn-signout"
                   onClick={onLogout}
                   title="Sign out of your account"
                 >
@@ -103,16 +131,16 @@ export default function Navbar({
           ) : (
             <div className="auth-buttons">
               <button
-                className="btn btn-outline btn-sm"
+                className="btn btn-ghost btn-sm"
                 onClick={() => onOpenAuth("login")}
               >
                 Sign In
               </button>
               <button
-                className="btn btn-secondary btn-sm"
+                className="btn btn-primary btn-sm"
                 onClick={() => onOpenAuth("register")}
               >
-                Register
+                Join Campus
               </button>
             </div>
           )}

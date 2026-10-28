@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { XIcon, UserIcon, TagIcon, ShieldCheckIcon, PackageIcon } from "./Icons";
 
 export default function AuthModal({
   isOpen,
@@ -98,34 +99,34 @@ export default function AuthModal({
             </button>
           </div>
           <button className="btn-close" onClick={onClose} aria-label="Close modal">
-            ✕
+            <XIcon size={18} />
           </button>
         </div>
 
-        <form onSubmit={handleSubmit}>
+        <form onSubmit={handleSubmit} className="modal-form">
           <div className="modal-body">
             {error && <div className="alert alert-danger mb-3">{error}</div>}
             {successMessage && <div className="alert alert-success mb-3">{successMessage}</div>}
 
             {mode === "register" && (
               <>
-                <div className="form-group">
+                <div className="form-group mb-3">
                   <label className="form-label" htmlFor="auth-name">
-                    Full Name
+                    Full Name *
                   </label>
                   <input
                     id="auth-name"
                     type="text"
                     name="name"
                     className="form-control"
-                    placeholder="e.g. Alex Student"
+                    placeholder="e.g. Alex Sharma"
                     value={formData.name}
                     onChange={handleChange}
                     required
                   />
                 </div>
 
-                <div className="form-group">
+                <div className="form-group mb-3">
                   <label className="form-label">Account Role *</label>
                   <div className="role-selector-cards">
                     <label
@@ -140,8 +141,11 @@ export default function AuthModal({
                         className="role-radio"
                       />
                       <div className="role-card-content">
-                        <span className="role-title">🛒 Buyer</span>
-                        <span className="role-desc">Browse items and bid on auctions</span>
+                        <div className="role-header-line">
+                          <PackageIcon size={16} />
+                          <span className="role-title">Buyer</span>
+                        </div>
+                        <span className="role-desc">Browse listings, bid on auctions & receive items</span>
                       </div>
                     </label>
 
@@ -157,8 +161,11 @@ export default function AuthModal({
                         className="role-radio"
                       />
                       <div className="role-card-content">
-                        <span className="role-title">🏷️ Seller</span>
-                        <span className="role-desc">List items and host auctions</span>
+                        <div className="role-header-line">
+                          <TagIcon size={16} />
+                          <span className="role-title">Seller</span>
+                        </div>
+                        <span className="role-desc">Post items, host auctions & coordinate handovers</span>
                       </div>
                     </label>
                   </div>
@@ -166,9 +173,9 @@ export default function AuthModal({
               </>
             )}
 
-            <div className="form-group">
+            <div className="form-group mb-3">
               <label className="form-label" htmlFor="auth-email">
-                Campus Email
+                Campus Email *
               </label>
               <input
                 id="auth-email"
@@ -182,9 +189,9 @@ export default function AuthModal({
               />
             </div>
 
-            <div className="form-group">
+            <div className="form-group mb-3">
               <label className="form-label" htmlFor="auth-password">
-                Password {mode === "register" && "(min. 8 characters)"}
+                Password {mode === "register" && "(min. 8 characters)"} *
               </label>
               <input
                 id="auth-password"
@@ -210,8 +217,8 @@ export default function AuthModal({
                   ? "Signing in..."
                   : "Creating account..."
                 : mode === "login"
-                ? "Sign In"
-                : "Create Account"}
+                ? "Sign In to Account"
+                : "Create Campus Account"}
             </button>
           </div>
         </form>

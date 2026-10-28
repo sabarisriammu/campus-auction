@@ -1,6 +1,17 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useMemo } from "react";
 import { api } from "../services/api";
 import { formatCurrency } from "../utils/formatters";
+import {
+  HandshakeIcon,
+  CheckCircleIcon,
+  ClockIcon,
+  AlertTriangleIcon,
+  LocationIcon,
+  PackageIcon,
+  RefreshIcon,
+  XIcon,
+  UserIcon,
+} from "./Icons";
 
 export default function TransactionsView({ user, token, onSwitchToBrowse, showToast }) {
   const [transactions, setTransactions] = useState([]);
@@ -40,6 +51,17 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
   useEffect(() => {
     fetchTransactions();
   }, [fetchTransactions]);
+
+  // Metric aggregates
+  const metrics = useMemo(() => {
+    const total = transactions.length;
+    const completed = transactions.filter((t) => t.status === "COMPLETED").length;
+    const inProgress = transactions.filter(
+      (t) => t.status === "HANDOVER_IN_PROGRESS" || t.status === "PENDING"
+    ).length;
+    const disputed = transactions.filter((t) => t.status === "DISPUTED").length;
+    return { total, completed, inProgress, disputed };
+  }, [transactions]);
 
   const handleOpenCoordination = (tx) => {
     setCoordinatingTx(tx);
@@ -159,21 +181,49 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
       {/* View Header */}
       <div className="transactions-header-section">
         <div>
-          <h2 className="section-title">🤝 Handover & Transaction Status</h2>
+          <div className="header-badge-row">
+            <span className="badge badge-purple">
+              <HandshakeIcon size={13} />
+              <span>Campus Handover Hub</span>
+            </span>
+          </div>
+          <h2 className="section-title">Handover & Settlement Console</h2>
           <p className="section-subtitle">
-            Track item handovers, exchange confirmations, and dispute resolution for won and sold auctions.
+            Coordinate safe on-campus meeting locations, execute mutual exchange confirmations, and resolve disputes.
           </p>
         </div>
+
         <button className="btn btn-outline btn-sm" onClick={fetchTransactions} disabled={loading}>
-          🔄 Refresh
+          <RefreshIcon size={14} />
+          <span>Refresh</span>
         </button>
+      </div>
+
+      {/* Handover Metrics Overview */}
+      <div className="tx-metrics-grid">
+        <div className="tx-metric-card">
+          <span className="metric-number font-mono">{metrics.total}</span>
+          <span className="metric-label">Total Transactions</span>
+        </div>
+        <div className="tx-metric-card">
+          <span className="metric-number font-mono text-primary">{metrics.inProgress}</span>
+          <span className="metric-label">In Handover</span>
+        </div>
+        <div className="tx-metric-card">
+          <span className="metric-number font-mono text-success">{metrics.completed}</span>
+          <span className="metric-label">Completed</span>
+        </div>
+        <div className="tx-metric-card">
+          <span className="metric-number font-mono text-danger">{metrics.disputed}</span>
+          <span className="metric-label">Disputed</span>
+        </div>
       </div>
 
       {/* Filter Tabs */}
       <div className="transaction-filter-tabs">
         {[
-          { key: "ALL", label: "All Transactions" },
-          { key: "PENDING", label: "Pending" },
+          { key: "ALL", label: "All Records" },
+          { key: "PENDING", label: "Pending Setup" },
           { key: "HANDOVER_IN_PROGRESS", label: "In Progress" },
           { key: "COMPLETED", label: "Completed" },
           { key: "DISPUTED", label: "Disputed" },
@@ -192,15 +242,16 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
       {loading && (
         <div className="loading-state">
           <div className="spinner"></div>
-          <p>Loading transactions and handover records...</p>
+          <p>Retrieving campus handover records...</p>
         </div>
       )}
 
       {!loading && error && (
         <div className="alert alert-danger mb-4">
-          <span>⚠️ {error}</span>
+          <AlertTriangleIcon size={18} />
+          <span>{error}</span>
           <button className="btn btn-sm btn-outline ml-3" onClick={fetchTransactions}>
-            Try Again
+            Retry
           </button>
         </div>
       )}
@@ -208,12 +259,14 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
       {/* Empty State */}
       {!loading && !error && transactions.length === 0 && (
         <div className="empty-state-card">
-          <span className="empty-icon">📦</span>
-          <h3>No Handover Transactions Found</h3>
+          <div className="empty-state-icon">
+            <HandshakeIcon size={40} />
+          </div>
+          <h3>No Handover Records Found</h3>
           <p>
             {statusFilter === "ALL"
-              ? "You do not have any sold auctions or items won yet. Once an auction concludes with a winning bid, the handover record will appear here."
-              : `No transactions matching the status "${statusFilter}".`}
+              ? "You do not have any won or sold auctions in your handover log yet. Once an auction closes with a winner, the handover coordination ledger will automatically appear here."
+              : `No transactions found under status "${statusFilter}".`}
           </p>
           <button className="btn btn-primary mt-3" onClick={onSwitchToBrowse}>
             Browse Active Auctions
@@ -237,6 +290,12 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                 : `http://localhost:5000${listing.imageUrl}`
               : null;
 
+            // Handover Progress Steps
+            const step1Done = true; // Auction Won / Created
+            const step2Done = Boolean(tx.handoverLocation); // Coordinated
+            const step3Done = Boolean(tx.sellerConfirmed); // Seller Delivered
+            const step4Done = Boolean(tx.buyerConfirmed); // Buyer Confirmed
+
             return (
               <div key={tx._id} className={`transaction-card ${tx.status.toLowerCase()}`}>
                 {/* Card Top: Item & Overall Status */}
@@ -245,7 +304,9 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                     {itemImage ? (
                       <img src={itemImage} alt={listing.title} className="tx-thumbnail" />
                     ) : (
-                      <div className="tx-thumbnail-placeholder">📦</div>
+                      <div className="tx-thumbnail-placeholder">
+                        <PackageIcon size={24} />
+                      </div>
                     )}
                     <div>
                       <h3 className="tx-item-title">{listing.title || "Auction Item"}</h3>
@@ -253,7 +314,7 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                         {listing.category && <span className="meta-pill">{listing.category}</span>}
                         {listing.condition && <span className="meta-pill">{listing.condition}</span>}
                         <span className="tx-price-pill font-mono">
-                          Final Price: <strong>{formatCurrency(tx.finalPrice)}</strong>
+                          Winning Bid: <strong>{formatCurrency(tx.finalPrice)}</strong>
                         </span>
                       </div>
                     </div>
@@ -262,8 +323,54 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                   <div className="tx-status-col">
                     {getStatusBadge(tx.status)}
                     <span className="tx-role-badge">
-                      {isSeller ? "🏷️ You are the Seller" : isBuyer ? "🛍️ You are the Winning Buyer" : "🛡️ Admin View"}
+                      {isSeller ? "Seller Role" : isBuyer ? "Winning Buyer" : "Admin Oversight"}
                     </span>
+                  </div>
+                </div>
+
+                {/* 4-Step Handover Stepper */}
+                <div className="handover-stepper">
+                  <div className={`stepper-step ${step1Done ? "completed" : "active"}`}>
+                    <div className="step-circle">
+                      <CheckCircleIcon size={12} />
+                    </div>
+                    <span className="step-label">Auction Won</span>
+                  </div>
+                  <div className={`stepper-line ${step2Done ? "completed" : ""}`}></div>
+
+                  <div
+                    className={`stepper-step ${
+                      step2Done ? "completed" : step1Done ? "active" : ""
+                    }`}
+                  >
+                    <div className="step-circle">
+                      {step2Done ? <CheckCircleIcon size={12} /> : "2"}
+                    </div>
+                    <span className="step-label">Meetup Set</span>
+                  </div>
+                  <div className={`stepper-line ${step3Done ? "completed" : ""}`}></div>
+
+                  <div
+                    className={`stepper-step ${
+                      step3Done ? "completed" : step2Done ? "active" : ""
+                    }`}
+                  >
+                    <div className="step-circle">
+                      {step3Done ? <CheckCircleIcon size={12} /> : "3"}
+                    </div>
+                    <span className="step-label">Item Handed</span>
+                  </div>
+                  <div className={`stepper-line ${step4Done ? "completed" : ""}`}></div>
+
+                  <div
+                    className={`stepper-step ${
+                      step4Done ? "completed" : step3Done ? "active" : ""
+                    }`}
+                  >
+                    <div className="step-circle">
+                      {step4Done ? <CheckCircleIcon size={12} /> : "4"}
+                    </div>
+                    <span className="step-label">Received & Complete</span>
                   </div>
                 </div>
 
@@ -271,22 +378,26 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                 {tx.status === "DISPUTED" && (
                   <div className="alert alert-danger tx-dispute-box">
                     <div className="tx-dispute-header">
-                      <strong>⚠️ Handover Problem Reported</strong>
+                      <div className="dispute-title-row">
+                        <AlertTriangleIcon size={18} />
+                        <strong>Handover Issue Reported</strong>
+                      </div>
                       <span className="tx-dispute-time">{formatDate(tx.disputedAt)}</span>
                     </div>
                     <p className="tx-dispute-reason">
                       <strong>Reason:</strong> "{tx.disputeReason}"
                     </p>
                     <p className="tx-dispute-sub">
-                      Reported by {tx.disputedBy?.name || "a party to this handover"}. Normal completion is paused until resolved.
+                      Reported by {tx.disputedBy?.name || "a transaction party"}. Normal settlement is paused until resolved.
                     </p>
-                    <div className="mt-2">
+                    <div className="mt-3">
                       <button
                         className="btn btn-secondary btn-sm"
                         onClick={() => handleResolveDispute(tx._id)}
                         disabled={isBusy}
                       >
-                        {isBusy ? "Resolving..." : "✅ Resolve Dispute & Resume Handover"}
+                        <CheckCircleIcon size={14} />
+                        <span>{isBusy ? "Resolving..." : "Resolve Dispute & Resume Handover"}</span>
                       </button>
                     </div>
                   </div>
@@ -304,75 +415,98 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                   </div>
 
                   <div className="tx-detail-block">
-                    <span className="detail-label">Handover Meetup Location</span>
-                    <span className="detail-value">
-                      {tx.handoverLocation ? `📍 ${tx.handoverLocation}` : "Location not coordinated yet"}
+                    <span className="detail-label">Campus Meetup Location</span>
+                    <span className="detail-value flex items-center gap-1">
+                      <LocationIcon size={14} />
+                      <span>{tx.handoverLocation || "Location not set yet"}</span>
                     </span>
                   </div>
 
                   {tx.handoverNotes && (
                     <div className="tx-detail-block full-width">
                       <span className="detail-label">Coordination Notes</span>
-                      <span className="detail-value note-text">💬 {tx.handoverNotes}</span>
+                      <span className="detail-value note-text">{tx.handoverNotes}</span>
                     </div>
                   )}
                 </div>
 
                 {/* Confirmation Progress Indicators */}
                 <div className="tx-confirmations-wrapper">
-                  <h4 className="confirmations-title">Handover Confirmations</h4>
+                  <h4 className="confirmations-title">Dual Handover Verification</h4>
                   <div className="confirmations-grid">
                     {/* Seller Confirmation Box */}
                     <div className={`confirmation-box ${tx.sellerConfirmed ? "confirmed" : "pending"}`}>
                       <div className="confirmation-header">
-                        <span className="conf-icon">{tx.sellerConfirmed ? "✅" : "⏳"}</span>
+                        <div className="conf-icon-circle">
+                          {tx.sellerConfirmed ? (
+                            <CheckCircleIcon size={16} />
+                          ) : (
+                            <ClockIcon size={16} />
+                          )}
+                        </div>
                         <strong>1. Seller Handover</strong>
                       </div>
                       <p className="conf-status">
                         {tx.sellerConfirmed
                           ? `Handed over on ${formatDate(tx.sellerConfirmedAt)}`
-                          : "Awaiting seller confirmation that the item has been given."}
+                          : "Awaiting seller confirmation that the item has been physically transferred."}
                       </p>
                       {/* Seller Action Button */}
-                      {(isSeller || isAdmin) && !tx.sellerConfirmed && tx.status !== "DISPUTED" && tx.status !== "COMPLETED" && (
-                        <button
-                          className="btn btn-primary btn-sm btn-block mt-2"
-                          onClick={() => handleConfirmHandover(tx._id)}
-                          disabled={isBusy}
-                        >
-                          {isBusy ? "Confirming..." : "✓ Confirm Item Handed Over"}
-                        </button>
-                      )}
+                      {(isSeller || isAdmin) &&
+                        !tx.sellerConfirmed &&
+                        tx.status !== "DISPUTED" &&
+                        tx.status !== "COMPLETED" && (
+                          <button
+                            className="btn btn-primary btn-sm btn-block mt-3"
+                            onClick={() => handleConfirmHandover(tx._id)}
+                            disabled={isBusy}
+                          >
+                            {isBusy ? "Confirming..." : "✓ Confirm Item Handed Over"}
+                          </button>
+                        )}
                     </div>
 
                     {/* Buyer Confirmation Box */}
                     <div className={`confirmation-box ${tx.buyerConfirmed ? "confirmed" : "pending"}`}>
                       <div className="confirmation-header">
-                        <span className="conf-icon">{tx.buyerConfirmed ? "✅" : "⏳"}</span>
+                        <div className="conf-icon-circle">
+                          {tx.buyerConfirmed ? (
+                            <CheckCircleIcon size={16} />
+                          ) : (
+                            <ClockIcon size={16} />
+                          )}
+                        </div>
                         <strong>2. Buyer Receipt</strong>
                       </div>
                       <p className="conf-status">
                         {tx.buyerConfirmed
                           ? `Received on ${formatDate(tx.buyerConfirmedAt)}`
-                          : "Awaiting winning buyer confirmation of item receipt."}
+                          : "Awaiting winning buyer confirmation of item receipt and inspection."}
                       </p>
                       {/* Buyer Action Button */}
-                      {(isBuyer || isAdmin) && !tx.buyerConfirmed && tx.status !== "DISPUTED" && tx.status !== "COMPLETED" && (
-                        <button
-                          className="btn btn-primary btn-sm btn-block mt-2"
-                          onClick={() => handleConfirmReceipt(tx._id)}
-                          disabled={isBusy}
-                        >
-                          {isBusy ? "Confirming..." : "✓ Confirm Item Received"}
-                        </button>
-                      )}
+                      {(isBuyer || isAdmin) &&
+                        !tx.buyerConfirmed &&
+                        tx.status !== "DISPUTED" &&
+                        tx.status !== "COMPLETED" && (
+                          <button
+                            className="btn btn-primary btn-sm btn-block mt-3"
+                            onClick={() => handleConfirmReceipt(tx._id)}
+                            disabled={isBusy}
+                          >
+                            {isBusy ? "Confirming..." : "✓ Confirm Item Received"}
+                          </button>
+                        )}
                     </div>
                   </div>
 
                   {/* Completion Notice */}
                   {tx.status === "COMPLETED" && (
                     <div className="alert alert-success mt-3 tx-completed-banner">
-                      <span>🎉 <strong>Transaction Completed!</strong> Both parties confirmed item handover on {formatDate(tx.completedAt)}.</span>
+                      <CheckCircleIcon size={18} />
+                      <span>
+                        <strong>Transaction Completed!</strong> Both parties verified item handover on{" "}
+                        {formatDate(tx.completedAt)}.
+                      </span>
                     </div>
                   )}
                 </div>
@@ -385,14 +519,16 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                         className="btn btn-outline btn-sm"
                         onClick={() => handleOpenCoordination(tx)}
                       >
-                        📍 {tx.handoverLocation ? "Update Meetup / Notes" : "Coordinate Meetup"}
+                        <LocationIcon size={14} />
+                        <span>{tx.handoverLocation ? "Update Meetup Location" : "Set Meetup Location"}</span>
                       </button>
 
                       <button
                         className="btn btn-danger-outline btn-sm"
                         onClick={() => handleOpenDispute(tx)}
                       >
-                        ⚠️ Report Issue
+                        <AlertTriangleIcon size={14} />
+                        <span>Report Issue</span>
                       </button>
                     </>
                   )}
@@ -405,41 +541,49 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
 
       {/* Coordination Modal */}
       {coordinatingTx && (
-        <div className="modal-backdrop">
-          <div className="modal modal-md">
+        <div className="modal-overlay" onClick={() => setCoordinatingTx(null)}>
+          <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title">📍 Coordinate Handover</h3>
-              <button className="modal-close" onClick={() => setCoordinatingTx(null)}>
-                ✕
+              <div className="modal-header-titles">
+                <span className="listing-category-pill">Meetup Setup</span>
+                <h3 className="modal-title">Coordinate Campus Handover</h3>
+              </div>
+              <button
+                className="btn-close"
+                onClick={() => setCoordinatingTx(null)}
+                aria-label="Close"
+              >
+                <XIcon size={18} />
               </button>
             </div>
-            <form onSubmit={handleSaveCoordination}>
+            <form onSubmit={handleSaveCoordination} className="modal-form">
               <div className="modal-body">
-                <p className="modal-subtitle mb-3">
-                  Agree on a safe, public campus location and time to exchange the item.
+                <p className="modal-subtitle mb-4">
+                  Agree on a safe, well-lit campus location and time window to inspect and exchange the item.
                 </p>
 
                 <div className="form-group mb-3">
-                  <label className="form-label">Campus Meetup Location</label>
+                  <label className="form-label">Campus Meeting Spot *</label>
                   <input
                     type="text"
                     className="form-control"
-                    placeholder="e.g. Student Union 1st Floor, Campus Library Lobby"
+                    placeholder="e.g. Student Center Lobby, Main Library Entrance"
                     value={meetupLocation}
                     onChange={(e) => setMeetupLocation(e.target.value)}
                     maxLength={200}
+                    required
                   />
                   <small className="form-text text-muted">
-                    Choose a well-lit, public location on campus.
+                    Always choose a public, busy location on campus.
                   </small>
                 </div>
 
                 <div className="form-group mb-3">
-                  <label className="form-label">Coordination Notes / Availability</label>
+                  <label className="form-label">Coordination Notes / Time Slot</label>
                   <textarea
                     className="form-control"
                     rows="3"
-                    placeholder="e.g. Available Tuesday between 2pm-4pm. I'll wear a blue jacket."
+                    placeholder="e.g. Free after 3 PM Wednesday. Wearing a blue hoodie near the cafe counter."
                     value={meetupNotes}
                     onChange={(e) => setMeetupNotes(e.target.value)}
                     maxLength={1000}
@@ -461,7 +605,7 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                   className="btn btn-primary"
                   disabled={savingCoordination}
                 >
-                  {savingCoordination ? "Saving Details..." : "Save Coordination"}
+                  {savingCoordination ? "Saving..." : "Save Coordination"}
                 </button>
               </div>
             </form>
@@ -471,26 +615,33 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
 
       {/* Dispute Modal */}
       {disputingTx && (
-        <div className="modal-backdrop">
-          <div className="modal modal-md">
+        <div className="modal-overlay" onClick={() => setDisputingTx(null)}>
+          <div className="modal-content modal-md" onClick={(e) => e.stopPropagation()}>
             <div className="modal-header">
-              <h3 className="modal-title text-danger">⚠️ Report Handover Issue</h3>
-              <button className="modal-close" onClick={() => setDisputingTx(null)}>
-                ✕
+              <div className="modal-header-titles">
+                <span className="listing-category-pill text-danger">Issue Resolution</span>
+                <h3 className="modal-title text-danger">Report Handover Problem</h3>
+              </div>
+              <button
+                className="btn-close"
+                onClick={() => setDisputingTx(null)}
+                aria-label="Close"
+              >
+                <XIcon size={18} />
               </button>
             </div>
-            <form onSubmit={handleSubmitDispute}>
+            <form onSubmit={handleSubmitDispute} className="modal-form">
               <div className="modal-body">
-                <p className="modal-subtitle mb-3">
-                  If the item was not as described, the counterparty failed to show up, or an issue occurred during handover, document it below.
+                <p className="modal-subtitle mb-4">
+                  If the item differs significantly from the listing, the counterparty failed to attend the meetup, or an issue arose, document it here.
                 </p>
 
                 <div className="form-group mb-3">
-                  <label className="form-label">Explain the Issue *</label>
+                  <label className="form-label">Explanation of the Issue *</label>
                   <textarea
                     className="form-control"
                     rows="4"
-                    placeholder="Please describe the issue in detail (minimum 5 characters)..."
+                    placeholder="Describe what occurred with as much detail as possible (minimum 5 characters)..."
                     value={disputeReason}
                     onChange={(e) => setDisputeReason(e.target.value)}
                     required
@@ -514,7 +665,7 @@ export default function TransactionsView({ user, token, onSwitchToBrowse, showTo
                   className="btn btn-danger"
                   disabled={submittingDispute}
                 >
-                  {submittingDispute ? "Submitting Issue..." : "Submit Dispute"}
+                  {submittingDispute ? "Submitting..." : "Report Issue"}
                 </button>
               </div>
             </form>
