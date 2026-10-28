@@ -19,7 +19,6 @@ export default function CreateListingModal({
   user,
   onOpenAuth,
 }) {
-  // Default end time: 3 days in the future
   const getDefaultEndTime = () => {
     const d = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
     d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
@@ -46,6 +45,8 @@ export default function CreateListingModal({
   const [error, setError] = useState("");
 
   if (!isOpen) return null;
+
+  const isBuyer = user && (user.role === "buyer" || !user.role);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -138,6 +139,29 @@ export default function CreateListingModal({
                 }}
               >
                 Create Account
+              </button>
+            </div>
+          </div>
+        ) : isBuyer ? (
+          <div className="modal-body auth-prompt-box">
+            <span className="auth-prompt-icon">🏷️</span>
+            <h3>Seller Role Required</h3>
+            <p>
+              You are currently signed in with a <strong>Buyer</strong> account.
+              Only users registered as a <strong>Seller</strong> or <strong>Admin</strong> can list items and host auctions on campus.
+            </p>
+            <div className="auth-prompt-buttons">
+              <button className="btn btn-outline" onClick={onClose}>
+                Continue Browsing
+              </button>
+              <button
+                className="btn btn-primary"
+                onClick={() => {
+                  onClose();
+                  onOpenAuth("register");
+                }}
+              >
+                Register as Seller
               </button>
             </div>
           </div>

@@ -1,14 +1,14 @@
 const express = require("express");
 const mongoose = require("mongoose");
 const Listing = require("../models/Listing");
-const authenticate = require("../middleware/authMiddleware");
+const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
 
 const router = express.Router();
 
 const ALLOWED_CONDITIONS = ["New", "Like New", "Good", "Fair", "Poor"];
 
-// POST /api/listings - Create a new listing (Protected)
-router.post("/", authenticate, async (req, res) => {
+// POST /api/listings - Create a new listing (Protected: Sellers and Admins only)
+router.post("/", authenticate, authorizeRoles("seller", "admin"), async (req, res) => {
   try {
     const {
       title,
@@ -85,7 +85,7 @@ router.post("/", authenticate, async (req, res) => {
 
     const populatedListing = await Listing.findById(newListing._id).populate(
       "seller",
-      "name email"
+      "name email role"
     );
 
     return res.status(201).json({
@@ -133,7 +133,7 @@ router.get("/", async (req, res) => {
     }
 
     const listings = await Listing.find(query)
-      .populate("seller", "name email")
+      .populate("seller", "name email role")
       .sort({ createdAt: -1 });
 
     return res.status(200).json({
@@ -159,7 +159,7 @@ router.get("/:id", async (req, res) => {
       });
     }
 
-    const listing = await Listing.findById(id).populate("seller", "name email");
+    const listing = await Listing.findById(id).populate("seller", "name email role");
 
     if (!listing) {
       return res.status(404).json({
@@ -178,7 +178,7 @@ router.get("/:id", async (req, res) => {
   }
 });
 
-// Handler for editing a listing (Supports both PUT and PATCH)
+// Handler for editing a listing (Protected: Sellers of the item and Admins only)
 const handleUpdateListing = async (req, res) => {
   try {
     const { id } = req.params;
@@ -197,8 +197,11 @@ const handleUpdateListing = async (req, res) => {
       });
     }
 
-    // Ownership check: only the seller can edit
-    if (listing.seller.toString() !== req.user.id.toString()) {
+    // Role & Ownership check: sellers can only edit their own listings; admins can manage any listing
+    const isOwner = listing.seller.toString() === req.user.id.toString();
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({
         message: "You are not authorized to edit this listing.",
       });
@@ -301,7 +304,7 @@ const handleUpdateListing = async (req, res) => {
 
     const updatedListing = await Listing.findById(listing._id).populate(
       "seller",
-      "name email"
+      "name email role"
     );
 
     return res.status(200).json({
@@ -323,10 +326,10 @@ const handleUpdateListing = async (req, res) => {
   }
 };
 
-router.put("/:id", authenticate, handleUpdateListing);
-router.patch("/:id", authenticate, handleUpdateListing);
+router.put("/:id", authenticate, authorizeRoles("seller", "admin"), handleUpdateListing);
+router.patch("/:id", authenticate, authorizeRoles("seller", "admin"), handleUpdateListing);
 
-// Handler for cancelling a listing (Supports PATCH /:id/cancel and DELETE /:id)
+// Handler for cancelling a listing (Protected: Sellers of the item and Admins only)
 const handleCancelListing = async (req, res) => {
   try {
     const { id } = req.params;
@@ -345,8 +348,11 @@ const handleCancelListing = async (req, res) => {
       });
     }
 
-    // Ownership check: only the seller can cancel
-    if (listing.seller.toString() !== req.user.id.toString()) {
+    // Role & Ownership check: sellers can only cancel their own listings; admins can cancel any listing
+    const isOwner = listing.seller.toString() === req.user.id.toString();
+    const isAdmin = req.user.role === "admin";
+
+    if (!isOwner && !isAdmin) {
       return res.status(403).json({
         message: "You are not authorized to cancel this listing.",
       });
@@ -369,7 +375,7 @@ const handleCancelListing = async (req, res) => {
 
     const cancelledListing = await Listing.findById(listing._id).populate(
       "seller",
-      "name email"
+      "name email role"
     );
 
     return res.status(200).json({
@@ -384,7 +390,7 @@ const handleCancelListing = async (req, res) => {
   }
 };
 
-router.patch("/:id/cancel", authenticate, handleCancelListing);
-router.delete("/:id", authenticate, handleCancelListing);
+router.patch("/:id/cancel", authenticate, authorizeRoles("seller", "admin"), handleCancelListing);
+router.delete("/:id", authenticate, authorizeRoles("seller", "admin"), handleCancelListing);
 
 module.exports = router;

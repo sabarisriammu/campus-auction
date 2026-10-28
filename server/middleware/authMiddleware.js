@@ -40,6 +40,7 @@ const authenticate = async (req, res, next) => {
       id: user._id.toString(),
       name: user.name,
       email: user.email,
+      role: user.role || "buyer",
     };
 
     next();
@@ -63,4 +64,29 @@ const authenticate = async (req, res, next) => {
   }
 };
 
+/**
+ * Role-authorization middleware generator.
+ * Enforces that req.user.role matches one of the specified allowedRoles.
+ * @param  {...string} allowedRoles Roles permitted to access the route
+ */
+const authorizeRoles = (...allowedRoles) => {
+  return (req, res, next) => {
+    if (!req.user || !req.user.role) {
+      return res.status(401).json({
+        message: "Authentication required before verifying role permissions.",
+      });
+    }
+
+    if (!allowedRoles.includes(req.user.role)) {
+      return res.status(403).json({
+        message: `Access denied. Insufficient permissions. Allowed roles: ${allowedRoles.join(", ")}.`,
+      });
+    }
+
+    next();
+  };
+};
+
 module.exports = authenticate;
+module.exports.authenticate = authenticate;
+module.exports.authorizeRoles = authorizeRoles;

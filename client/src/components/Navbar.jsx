@@ -8,6 +8,17 @@ export default function Navbar({
   activeTab,
   setActiveTab,
 }) {
+  const getRoleBadge = (role) => {
+    switch (role) {
+      case "admin":
+        return <span className="role-pill role-pill-admin">Admin</span>;
+      case "seller":
+        return <span className="role-pill role-pill-seller">Seller</span>;
+      default:
+        return <span className="role-pill role-pill-buyer">Buyer</span>;
+    }
+  };
+
   return (
     <header className="navbar">
       <div className="navbar-container">
@@ -35,6 +46,7 @@ export default function Navbar({
           <button
             className="btn btn-primary btn-create"
             onClick={onOpenCreate}
+            title={user?.role === "buyer" ? "Sellers only" : "Create new auction"}
           >
             <span>+</span> List an Item
           </button>
@@ -43,11 +55,12 @@ export default function Navbar({
         <div className="navbar-user">
           {user ? (
             <div className="user-profile">
-              <div className="user-badge" title={user.email}>
+              <div className="user-badge" title={`${user.email} (${user.role || "buyer"})`}>
                 <span className="user-avatar">
                   {user.name ? user.name.charAt(0).toUpperCase() : "U"}
                 </span>
                 <span className="user-name">{user.name}</span>
+                {getRoleBadge(user.role)}
               </div>
               <button
                 className="btn btn-outline btn-sm"

@@ -9,7 +9,7 @@ const router = express.Router();
 // POST /api/auth/register
 router.post("/register", async (req, res) => {
   try {
-    const { name, email, password } = req.body;
+    const { name, email, password, role } = req.body;
 
     // 1. Validate required fields
     if (!name || !email || !password) {
@@ -34,7 +34,24 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // 4. Check whether the email already exists
+    // 4. Validate role: only 'buyer' or 'seller' allowed during registration. Never allow admin.
+    let assignedRole = "buyer";
+    if (role !== undefined && role !== null) {
+      const normalizedRole = String(role).trim().toLowerCase();
+      if (normalizedRole === "admin") {
+        return res.status(400).json({
+          message: "Registration as admin is not permitted.",
+        });
+      }
+      if (normalizedRole !== "buyer" && normalizedRole !== "seller") {
+        return res.status(400).json({
+          message: "Invalid role. Role must be either 'buyer' or 'seller'.",
+        });
+      }
+      assignedRole = normalizedRole;
+    }
+
+    // 5. Check whether the email already exists
     const normalizedEmail = email.trim().toLowerCase();
 
     const existingUser = await User.findOne({
@@ -47,21 +64,23 @@ router.post("/register", async (req, res) => {
       });
     }
 
-    // 5. Create the user
+    // 6. Create the user
     // User.js automatically hashes the password before saving.
     const user = await User.create({
       name: name.trim(),
       email: normalizedEmail,
       password,
+      role: assignedRole,
     });
 
-    // 6. Return safe user details
+    // 7. Return safe user details
     return res.status(201).json({
       message: "Registration successful!",
       user: {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: user.role || "buyer",
       },
     });
   } catch (error) {
@@ -119,11 +138,15 @@ router.post("/login", async (req, res) => {
       });
     }
 
-    // 5. Generate signed JWT token
+    // 5. Ensure role fallback for backward compatibility with legacy users
+    const effectiveRole = user.role || "buyer";
+
+    // 6. Generate signed JWT token including role
     const token = jwt.sign(
       {
         id: user._id,
         email: user.email,
+        role: effectiveRole,
       },
       process.env.JWT_SECRET,
       {
@@ -131,7 +154,7 @@ router.post("/login", async (req, res) => {
       }
     );
 
-    // 6. Return response with token and safe user details
+    // 7. Return response with token and safe user details
     return res.status(200).json({
       message: "Login successful!",
       token,
@@ -139,6 +162,7 @@ router.post("/login", async (req, res) => {
         id: user._id,
         name: user.name,
         email: user.email,
+        role: effectiveRole,
       },
     });
   } catch (error) {

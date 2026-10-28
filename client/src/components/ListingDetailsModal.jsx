@@ -30,6 +30,8 @@ export default function ListingDetailsModal({
   const isCancelled = status === "cancelled";
   const sellerId = typeof seller === "object" ? seller?._id : seller;
   const isOwner = user && sellerId && user.id === sellerId.toString();
+  const isAdmin = user && user.role === "admin";
+  const canManage = (isOwner && user?.role === "seller") || isAdmin;
 
   const isExpired = new Date(auctionEndTime) <= new Date();
 
@@ -110,7 +112,9 @@ export default function ListingDetailsModal({
                 <div className="seller-box">
                   <span className="seller-avatar-large">👤</span>
                   <div>
-                    <div className="seller-name-large">{seller?.name || "Campus Seller"}</div>
+                    <div className="seller-name-large">
+                      {seller?.name || "Campus Seller"} {seller?.role ? `(${seller.role})` : ""}
+                    </div>
                     <div className="seller-email">{seller?.email || "Verified Campus Member"}</div>
                   </div>
                 </div>
@@ -141,22 +145,24 @@ export default function ListingDetailsModal({
                   </div>
                 </div>
 
-                {/* Non-owner notice */}
-                {!isOwner && (
+                {/* Non-manager notice */}
+                {!canManage && (
                   <div className="bidding-placeholder-box">
                     <span className="placeholder-icon">🔨</span>
                     <p className="placeholder-title">Live Bidding Coming Soon</p>
                     <p className="placeholder-sub">
-                      Bidding features are currently in development. Keep this item saved!
+                      {user?.role === "buyer"
+                        ? "You are viewing this item as a Buyer. Bidding features are in development!"
+                        : "Bidding features are currently in development. Keep this item saved!"}
                     </p>
                   </div>
                 )}
 
-                {/* Owner controls */}
-                {isOwner && (
+                {/* Owner & Admin controls */}
+                {canManage && (
                   <div className="owner-actions-box">
                     <div className="owner-header">
-                      <span>⚙️ Owner Controls</span>
+                      <span>{isAdmin ? "🛡️ Admin Controls" : "⚙️ Owner Controls"}</span>
                     </div>
 
                     {!isCancelled && !isExpired ? (

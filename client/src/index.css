@@ -1085,3 +1085,85 @@ textarea.form-control {
     gap: 0;
   }
 }
+
+
+/* Role Badges & Selector Cards (RBAC) */
+.role-pill {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 9999px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+
+.role-pill-buyer {
+  background-color: #e0f2fe;
+  color: #0369a1;
+  border: 1px solid #bae6fd;
+}
+
+.role-pill-seller {
+  background-color: #fef3c7;
+  color: #b45309;
+  border: 1px solid #fde68a;
+}
+
+.role-pill-admin {
+  background-color: #f3e8ff;
+  color: #7e22ce;
+  border: 1px solid #e9d5ff;
+}
+
+.role-selector-cards {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.role-card {
+  flex: 1;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1.5px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: #f8fafc;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.role-card:hover {
+  background: #f1f5f9;
+  border-color: #cbd5e1;
+}
+
+.role-card.active {
+  background: #eff6ff;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.15);
+}
+
+.role-radio {
+  margin-top: 3px;
+  cursor: pointer;
+}
+
+.role-card-content {
+  display: flex;
+  flex-direction: column;
+}
+
+.role-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-main);
+  margin-bottom: 2px;
+}
+
+.role-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.3;
+}

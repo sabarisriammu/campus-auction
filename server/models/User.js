@@ -1,18 +1,17 @@
-
 const mongoose = require("mongoose");
 const bcrypt = require("bcryptjs");
-const User = require("../models/User");
+
 const userSchema = new mongoose.Schema(
   {
     name: {
       type: String,
-      required: true,
+      required: [true, "Name is required."],
       trim: true,
     },
 
     email: {
       type: String,
-      required: true,
+      required: [true, "Email is required."],
       unique: true,
       lowercase: true,
       trim: true,
@@ -20,9 +19,18 @@ const userSchema = new mongoose.Schema(
 
     password: {
       type: String,
-      required: true,
+      required: [true, "Password must be at least 8 characters long."],
       minlength: 8,
       select: false,
+    },
+
+    role: {
+      type: String,
+      enum: {
+        values: ["buyer", "seller", "admin"],
+        message: "{VALUE} is not a valid role. Allowed roles: buyer, seller, admin.",
+      },
+      default: "buyer",
     },
   },
   {

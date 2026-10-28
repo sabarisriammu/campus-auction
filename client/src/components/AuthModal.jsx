@@ -12,6 +12,7 @@ export default function AuthModal({
     name: "",
     email: "",
     password: "",
+    role: "buyer",
   });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -65,6 +66,7 @@ export default function AuthModal({
           name: formData.name.trim(),
           email: formData.email.trim(),
           password: formData.password,
+          role: formData.role,
         });
         setSuccessMessage("Account created successfully! Signing you in...");
       }
@@ -106,21 +108,62 @@ export default function AuthModal({
             {successMessage && <div className="alert alert-success mb-3">{successMessage}</div>}
 
             {mode === "register" && (
-              <div className="form-group">
-                <label className="form-label" htmlFor="auth-name">
-                  Full Name
-                </label>
-                <input
-                  id="auth-name"
-                  type="text"
-                  name="name"
-                  className="form-control"
-                  placeholder="e.g. Alex Student"
-                  value={formData.name}
-                  onChange={handleChange}
-                  required
-                />
-              </div>
+              <>
+                <div className="form-group">
+                  <label className="form-label" htmlFor="auth-name">
+                    Full Name
+                  </label>
+                  <input
+                    id="auth-name"
+                    type="text"
+                    name="name"
+                    className="form-control"
+                    placeholder="e.g. Alex Student"
+                    value={formData.name}
+                    onChange={handleChange}
+                    required
+                  />
+                </div>
+
+                <div className="form-group">
+                  <label className="form-label">Account Role *</label>
+                  <div className="role-selector-cards">
+                    <label
+                      className={`role-card ${formData.role === "buyer" ? "active" : ""}`}
+                    >
+                      <input
+                        type="radio"
+                        name="role"
+                        value="buyer"
+                        checked={formData.role === "buyer"}
+                        onChange={handleChange}
+                        className="role-radio"
+                      />
+                      <div className="role-card-content">
+                        <span className="role-title">🛒 Buyer</span>
+                        <span className="role-desc">Browse items and bid on auctions</span>
+                      </div>
+                    </label>
+
+                    <label
+                      className={`role-card ${formData.role === "seller" ? "active" : ""}`}
+                    >
+                      <input
+                        type="radio"
+                        name="role"
+                        value="seller"
+                        checked={formData.role === "seller"}
+                        onChange={handleChange}
+                        className="role-radio"
+                      />
+                      <div className="role-card-content">
+                        <span className="role-title">🏷️ Seller</span>
+                        <span className="role-desc">List items and host auctions</span>
+                      </div>
+                    </label>
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="form-group">
