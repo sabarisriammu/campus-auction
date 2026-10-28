@@ -93,6 +93,14 @@ export default function App() {
     }
   };
 
+  const handleWatchlistRemove = useCallback((listingId) => {
+    setSavedListingIds((prev) => {
+      const next = new Set(prev);
+      next.delete(listingId);
+      return next;
+    });
+  }, []);
+
   // Toast Notification
   const [toast, setToast] = useState(null);
 
@@ -353,9 +361,7 @@ export default function App() {
             onSelectListing={handleSelectListing}
             onSwitchToBrowse={() => setActiveTab("browse")}
             showToast={showToast}
-            onWatchlistCountChange={(count) => {
-              fetchWatchlistIds();
-            }}
+            onItemRemoved={handleWatchlistRemove}
           />
         ) : (
           <ListingsView

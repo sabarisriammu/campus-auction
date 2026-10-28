@@ -69,7 +69,7 @@ function WatchlistCard({ item, onSelect, onRemove }) {
           <div className="watchlist-tags">
             {condition && <span className="condition-tag">{condition}</span>}
             <span className="saved-date">
-              Saved {new Date(item.savedAt).toLocaleDateString()}
+              {item.savedAt ? `Saved ${new Date(item.savedAt).toLocaleDateString()}` : "Saved"}
             </span>
           </div>
           <button
@@ -102,7 +102,7 @@ function WatchlistCard({ item, onSelect, onRemove }) {
               {isSold ? "Final Bid" : "Current Bid"}
             </span>
             <span className="price-val font-mono">
-              ₹{Number(displayPrice).toLocaleString("en-IN", { minimumFractionDigits: 2 })}
+              {formatCurrency(displayPrice)}
             </span>
           </div>
 
@@ -164,7 +164,7 @@ export default function WatchlistView({
   onSelectListing,
   onSwitchToBrowse,
   showToast,
-  onWatchlistCountChange,
+  onItemRemoved,
 }) {
   const [watchlist, setWatchlist] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -172,21 +172,21 @@ export default function WatchlistView({
   const [filter, setFilter] = useState("ALL"); // ALL, ACTIVE, ENDED
 
   const fetchWatchlist = useCallback(async () => {
-    if (!token) return;
+    if (!token) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     setError(null);
     try {
       const data = await api.getWatchlist(token);
       setWatchlist(data.watchlist || []);
-      if (onWatchlistCountChange) {
-        onWatchlistCountChange((data.watchlist || []).length);
-      }
     } catch (err) {
       setError(err.message || "Failed to load saved items.");
     } finally {
       setLoading(false);
     }
-  }, [token, onWatchlistCountChange]);
+  }, [token]);
 
   useEffect(() => {
     fetchWatchlist();
@@ -199,8 +199,8 @@ export default function WatchlistView({
       if (showToast) {
         showToast("Item removed from your watchlist.", "info");
       }
-      if (onWatchlistCountChange) {
-        onWatchlistCountChange(Math.max(0, watchlist.length - 1));
+      if (onItemRemoved) {
+        onItemRemoved(listingId);
       }
     } catch (err) {
       if (showToast) {
