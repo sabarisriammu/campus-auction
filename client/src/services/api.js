@@ -92,4 +92,19 @@ export const api = {
     });
     return handleResponse(response);
   },
+
+  // Bidding endpoints
+  async placeBid(listingId, amount, token) {
+    const response = await fetch(`${API_BASE_URL}/listings/${listingId}/bids`, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ amount }),
+    });
+    return handleResponse(response);
+  },
+
+  async getListingBids(listingId) {
+    const response = await fetch(`${API_BASE_URL}/listings/${listingId}/bids`);
+    return handleResponse(response);
+  },
 };

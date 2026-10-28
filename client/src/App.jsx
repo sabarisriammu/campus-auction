@@ -225,10 +225,21 @@ export default function App() {
         <ListingDetailsModal
           listing={selectedListing}
           user={user}
+          token={token}
           onClose={() => setSelectedListing(null)}
           onEdit={(item) => setEditingListing(item)}
           onCancel={handleCancelListing}
           isCancelling={isCancelling}
+          onBidSuccess={(listingId, newPrice) => {
+            setSelectedListing((prev) => (prev ? { ...prev, currentPrice: newPrice } : null));
+            setListings((prev) =>
+              prev.map((l) => (l._id === listingId ? { ...l, currentPrice: newPrice } : l))
+            );
+          }}
+          onOpenAuth={(mode) => {
+            setAuthMode(mode);
+            setIsAuthOpen(true);
+          }}
         />
       )}
 
