@@ -363,4 +363,72 @@ export const api = {
     });
     return handleResponse(response);
   },
+
+  // Groq AI Assistant endpoints
+  async generateSellerListingDraft(params, token) {
+    const response = await fetch(`${API_BASE_URL}/ai/seller/draft`, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify(params),
+    });
+    return handleResponse(response);
+  },
+
+  async askBuyerAssistant(listingId, question) {
+    const response = await fetch(`${API_BASE_URL}/ai/buyer/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ listingId, question }),
+    });
+    return handleResponse(response);
+  },
+
+  async smartShopping(query) {
+    const response = await fetch(`${API_BASE_URL}/ai/shop`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ query }),
+    });
+    return handleResponse(response);
+  },
+
+  // Buyer-Seller Product Questions & Answers endpoints
+  async submitProductQuestion(listingId, question, token) {
+    const response = await fetch(`${API_BASE_URL}/questions`, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ listingId, question }),
+    });
+    return handleResponse(response);
+  },
+
+  async getSellerQuestionsInbox(token) {
+    const response = await fetch(`${API_BASE_URL}/questions/inbox`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async getMySubmittedQuestions(token) {
+    const response = await fetch(`${API_BASE_URL}/questions/my-questions`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async getListingQuestions(listingId, token) {
+    const response = await fetch(`${API_BASE_URL}/questions/listing/${listingId}`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async replyToQuestion(questionId, answer, token) {
+    const response = await fetch(`${API_BASE_URL}/questions/${questionId}/reply`, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ answer }),
+    });
+    return handleResponse(response);
+  },
 };
