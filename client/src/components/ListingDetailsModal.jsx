@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import { api } from "../services/api";
 import { formatCurrency } from "../utils/formatters";
 import { useCountdown } from "../hooks/useCountdown";
+import { getSocket } from "../services/socket";
 import RelistModal from "./RelistModal";
 import {
   XIcon,
@@ -49,6 +50,8 @@ export default function ListingDetailsModal({
   const [currentPrice, setCurrentPrice] = useState(
     listing?.currentPrice || listing?.startingPrice || 0
   );
+  const [socketStatus, setSocketStatus] = useState("connecting");
+  const [priceFlash, setPriceFlash] = useState(false);
 
   const fetchBids = useCallback(async () => {
     if (!currentListing?._id) return;
@@ -66,9 +69,102 @@ export default function ListingDetailsModal({
     }
   }, [currentListing?._id]);
 
+  const refreshListing = useCallback(async () => {
+    if (!currentListing?._id) return;
+    try {
+      const data = await api.getListingById(currentListing._id);
+      if (data?.listing) {
+        setCurrentListing(data.listing);
+        if (data.listing.currentPrice) {
+          setCurrentPrice(data.listing.currentPrice);
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to refresh listing details:", err.message);
+    }
+  }, [currentListing?._id]);
+
   useEffect(() => {
     fetchBids();
   }, [fetchBids]);
+
+  // Real-time Socket.IO Live Bidding Room Subscription
+  useEffect(() => {
+    const listingId = currentListing?._id;
+    if (!listingId) return;
+
+    const socket = getSocket(token);
+    if (!socket) return;
+
+    // Join room for this specific listing
+    socket.emit("auction:join", { listingId });
+
+    const handleConnect = () => {
+      setSocketStatus("connected");
+      // Authoritative resynchronization on reconnect
+      fetchBids();
+      refreshListing();
+    };
+
+    const handleDisconnect = () => setSocketStatus("disconnected");
+
+    if (socket.connected) {
+      setSocketStatus("connected");
+    } else {
+      setSocketStatus("connecting");
+    }
+
+    socket.on("connect", handleConnect);
+    socket.on("disconnect", handleDisconnect);
+
+    // Live bid broadcast event handler
+    const handleBidUpdated = (payload) => {
+      if (payload?.listingId !== listingId) return;
+
+      if (payload.currentPrice !== undefined) {
+        setCurrentPrice(payload.currentPrice);
+        setPriceFlash(true);
+        setTimeout(() => setPriceFlash(false), 2000);
+      }
+
+      if (payload.latestBid) {
+        setBids((prev) => {
+          const exists = prev.some((b) => b._id === payload.latestBid._id);
+          if (exists) return prev;
+          return [payload.latestBid, ...prev];
+        });
+      }
+
+      if (onBidSuccess) {
+        onBidSuccess(listingId, payload.currentPrice);
+      }
+    };
+
+    // Live auction lifecycle status event handler
+    const handleStatusUpdated = (payload) => {
+      if (payload?.listingId !== listingId) return;
+      setCurrentListing((prev) => ({
+        ...prev,
+        status: payload.status,
+        outcome: payload.outcome !== undefined ? payload.outcome : prev.outcome,
+        winner: payload.winner !== undefined ? payload.winner : prev.winner,
+        finalPrice: payload.finalPrice !== undefined ? payload.finalPrice : prev.finalPrice,
+        completionTime: payload.completionTime || prev.completionTime,
+      }));
+    };
+
+    socket.on("auction:bid-updated", handleBidUpdated);
+    socket.on("auction:status-updated", handleStatusUpdated);
+
+    // Cleanup: leave auction room and unbind event listeners cleanly
+    return () => {
+      socket.emit("auction:leave", { listingId });
+      socket.off("connect", handleConnect);
+      socket.off("disconnect", handleDisconnect);
+      socket.off("auction:bid-updated", handleBidUpdated);
+      socket.off("auction:status-updated", handleStatusUpdated);
+    };
+  }, [currentListing?._id, token, fetchBids, refreshListing, onBidSuccess]);
 
   if (!currentListing) return null;
 
@@ -100,6 +196,7 @@ export default function ListingDetailsModal({
   // Real-time second-by-second countdown hook
   const countdown = useCountdown(auctionEndTime, () => {
     fetchBids();
+    refreshListing();
   });
   const isExpired = isCompleted || countdown.isEnded;
 
@@ -497,12 +594,32 @@ export default function ListingDetailsModal({
               )}
 
               {/* Price Spotlight Card */}
-              <div className="price-card">
+              <div className={`price-card ${priceFlash ? "price-card-flash" : ""}`}>
+                {/* Live Socket Stream Indicator */}
+                <div className="live-stream-header-row mb-2">
+                  {socketStatus === "connected" ? (
+                    <span className="live-stream-pill live-online">
+                      <span className="pulse-indicator-dot"></span>
+                      <span>Live Bidding Active</span>
+                    </span>
+                  ) : socketStatus === "reconnecting" ? (
+                    <span className="live-stream-pill live-reconnecting">
+                      <span className="reconnecting-dot"></span>
+                      <span>Reconnecting stream...</span>
+                    </span>
+                  ) : (
+                    <span className="live-stream-pill live-offline">
+                      <span className="offline-dot"></span>
+                      <span>Offline Mode</span>
+                    </span>
+                  )}
+                </div>
+
                 <div className="price-card-header">
                   <span className="price-label">
                     {isSold ? "Final Winning Price" : "Current Bid"}
                   </span>
-                  <div className="price-highlight font-mono">
+                  <div className={`price-highlight font-mono ${priceFlash ? "price-flash-pulse" : ""}`}>
                     <span className="currency-prefix">₹</span>
                     <span>
                       {Number(

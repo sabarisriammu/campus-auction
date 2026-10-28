@@ -6,17 +6,14 @@ let socket = null;
 let currentToken = null;
 
 /**
- * Initializes or returns the authenticated Socket.IO connection.
- * @param {string} token - JWT bearer token
- * @returns {object|null}
+ * Initializes or returns the Socket.IO connection.
+ * If token is provided, authenticates the connection for user-specific rooms.
+ * If token is omitted, establishes a public connection for watching live auction updates.
+ * @param {string|null} token - JWT bearer token (optional)
+ * @returns {object}
  */
-export function getSocket(token) {
-  if (!token) {
-    disconnectSocket();
-    return null;
-  }
-
-  // Reuse existing socket if token is unchanged
+export function getSocket(token = null) {
+  // Reuse existing socket if token has not changed
   if (socket && currentToken === token) {
     if (!socket.connected) {
       socket.connect();
@@ -24,17 +21,21 @@ export function getSocket(token) {
     return socket;
   }
 
-  // Clean up existing socket before creating new one
+  // Clean up previous socket if token changed
   if (socket) {
     socket.disconnect();
   }
 
   currentToken = token;
+
+  const authPayload = token ? { token } : {};
+
   socket = io(SOCKET_URL, {
-    auth: { token },
+    auth: authPayload,
     reconnection: true,
-    reconnectionAttempts: 10,
-    reconnectionDelay: 2000,
+    reconnectionAttempts: 15,
+    reconnectionDelay: 1500,
+    reconnectionDelayMax: 5000,
     transports: ["websocket", "polling"],
   });
 
@@ -43,6 +44,24 @@ export function getSocket(token) {
   });
 
   return socket;
+}
+
+/**
+ * Join an auction's live update room
+ * @param {string} listingId
+ */
+export function joinAuctionRoom(listingId) {
+  if (!socket || !listingId) return;
+  socket.emit("auction:join", { listingId });
+}
+
+/**
+ * Leave an auction's live update room
+ * @param {string} listingId
+ */
+export function leaveAuctionRoom(listingId) {
+  if (!socket || !listingId) return;
+  socket.emit("auction:leave", { listingId });
 }
 
 /**

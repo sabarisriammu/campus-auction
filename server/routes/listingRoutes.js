@@ -6,6 +6,7 @@ const SecondChanceOffer = require("../models/SecondChanceOffer");
 const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
 const upload = require("../middleware/uploadMiddleware");
 const { closeExpiredAuction, processExpiredAuctions } = require("../services/auctionService");
+const socketService = require("../services/socketService");
 
 const router = express.Router();
 
@@ -524,6 +525,16 @@ const handleCancelListing = async (req, res) => {
 
     listing.status = "cancelled";
     await listing.save();
+
+    try {
+      socketService.broadcastStatusUpdate(listing._id.toString(), {
+        listingId: listing._id.toString(),
+        status: "cancelled",
+        outcome: null,
+      });
+    } catch (broadcastErr) {
+      console.error("Cancel status broadcast error:", broadcastErr.message);
+    }
 
     const cancelledListing = await Listing.findById(listing._id)
       .populate("seller", "name email role")

@@ -137,22 +137,20 @@ export default function App() {
     }
   }, [token]);
 
-  // Real-Time Socket.IO Notification Subscriptions
+  // Real-Time Socket.IO Notification & Marketplace Subscriptions
   useEffect(() => {
-    if (!token || !user) {
-      disconnectSocket();
-      setNotifications([]);
-      setUnreadCount(0);
-      return;
-    }
-
-    // Initial load
-    fetchNotifications();
-    fetchUnreadCount();
-
-    // Establish WebSocket connection
+    // Establish WebSocket connection (authenticated if token present, or guest)
     const socket = getSocket(token);
     if (!socket) return;
+
+    if (token && user) {
+      // Initial load of authenticated user's notifications
+      fetchNotifications();
+      fetchUnreadCount();
+    } else {
+      setNotifications([]);
+      setUnreadCount(0);
+    }
 
     const handleNewNotification = (newNotif) => {
       setNotifications((prev) => [newNotif, ...prev.filter((n) => n._id !== newNotif._id)]);
@@ -166,12 +164,45 @@ export default function App() {
       }
     };
 
+    // Global real-time bid price updates for marketplace cards
+    const handleGlobalPriceUpdate = (data) => {
+      if (!data?.listingId) return;
+      setListings((prev) =>
+        prev.map((item) =>
+          item._id === data.listingId
+            ? { ...item, currentPrice: data.currentPrice }
+            : item
+        )
+      );
+    };
+
+    // Global real-time auction status updates
+    const handleGlobalStatusUpdate = (data) => {
+      if (!data?.listingId) return;
+      setListings((prev) =>
+        prev.map((item) =>
+          item._id === data.listingId
+            ? {
+                ...item,
+                status: data.status,
+                outcome: data.outcome !== undefined ? data.outcome : item.outcome,
+                finalPrice: data.finalPrice !== undefined ? data.finalPrice : item.finalPrice,
+              }
+            : item
+        )
+      );
+    };
+
     socket.on("notification:new", handleNewNotification);
     socket.on("notification:unread-count", handleUnreadCountUpdate);
+    socket.on("listing:price-updated", handleGlobalPriceUpdate);
+    socket.on("listing:status-updated", handleGlobalStatusUpdate);
 
     return () => {
       socket.off("notification:new", handleNewNotification);
       socket.off("notification:unread-count", handleUnreadCountUpdate);
+      socket.off("listing:price-updated", handleGlobalPriceUpdate);
+      socket.off("listing:status-updated", handleGlobalStatusUpdate);
     };
   }, [token, user, fetchNotifications, fetchUnreadCount]);
 

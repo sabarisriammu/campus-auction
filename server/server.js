@@ -5,6 +5,7 @@ const http = require("http");
 const { Server } = require("socket.io");
 const jwt = require("jsonwebtoken");
 const mongoose = require("mongoose");
+const Listing = require("./models/Listing");
 const User = require("./models/User");
 const authRoutes = require("./routes/authRoutes");
 const listingRoutes = require("./routes/listingRoutes");
@@ -14,6 +15,7 @@ const notificationRoutes = require("./routes/notificationRoutes");
 const watchlistRoutes = require("./routes/watchlistRoutes");
 const secondChanceRoutes = require("./routes/secondChanceRoutes");
 const notificationService = require("./services/notificationService");
+const socketService = require("./services/socketService");
 const { processExpiredAuctions } = require("./services/auctionService");
 const { processAuctionReminders } = require("./services/reminderService");
 const { checkAndExpireOffers } = require("./services/secondChanceService");
@@ -22,16 +24,28 @@ require("dotenv").config();
 const app = express();
 const server = http.createServer(app);
 
-// Initialize Socket.IO with CORS
+// Allowed frontend origins for CORS security
+const clientOrigins = process.env.CLIENT_URL
+  ? process.env.CLIENT_URL.split(",").map((u) => u.trim())
+  : [
+      "http://localhost:5173",
+      "http://127.0.0.1:5173",
+      "http://localhost:3000",
+      "http://localhost:5000",
+    ];
+
+// Initialize Socket.IO with restricted CORS
 const io = new Server(server, {
   cors: {
-    origin: "*",
+    origin: clientOrigins,
     methods: ["GET", "POST", "PATCH", "PUT", "DELETE"],
+    credentials: true,
   },
 });
 
-// Register io instance with notificationService for real-time dispatch
+// Register io instance with real-time dispatch services
 notificationService.setIo(io);
+socketService.setIo(io);
 
 // Authenticate WebSocket connections using JWT
 io.use(async (socket, next) => {
@@ -40,8 +54,10 @@ io.use(async (socket, next) => {
       socket.handshake.auth?.token ||
       socket.handshake.headers?.authorization?.replace(/^Bearer\s+/i, "");
 
+    // If no token is provided, allow unauthenticated connection for public auction room viewing
     if (!token) {
-      return next(new Error("Authentication error: Token required."));
+      socket.user = null;
+      return next();
     }
 
     if (!process.env.JWT_SECRET) {
@@ -68,16 +84,71 @@ io.use(async (socket, next) => {
 });
 
 io.on("connection", (socket) => {
-  // Join the authenticated user to their private, secure room
-  const userRoom = `user:${socket.user.id}`;
-  socket.join(userRoom);
+  // If authenticated, join the user to their private, secure room
+  if (socket.user?.id) {
+    const userRoom = `user:${socket.user.id}`;
+    socket.join(userRoom);
+  }
+
+  // Join a specific auction's public live-update room
+  socket.on("auction:join", async (data, callback) => {
+    try {
+      const listingId = data?.listingId || data;
+      if (!listingId || !mongoose.Types.ObjectId.isValid(listingId)) {
+        if (typeof callback === "function") {
+          return callback({ success: false, error: "Invalid listing ID format." });
+        }
+        return;
+      }
+
+      // Verify listing exists in database before joining room
+      const exists = await Listing.exists({ _id: listingId });
+      if (!exists) {
+        if (typeof callback === "function") {
+          return callback({ success: false, error: "Auction listing not found." });
+        }
+        return;
+      }
+
+      const room = `auction:${listingId}`;
+      socket.join(room);
+      if (typeof callback === "function") {
+        callback({ success: true, room });
+      }
+    } catch (err) {
+      if (typeof callback === "function") {
+        callback({ success: false, error: "Failed to join auction room." });
+      }
+    }
+  });
+
+  // Leave a specific auction's public room
+  socket.on("auction:leave", (data, callback) => {
+    const listingId = data?.listingId || data;
+    if (listingId && mongoose.Types.ObjectId.isValid(listingId)) {
+      socket.leave(`auction:${listingId}`);
+      if (typeof callback === "function") {
+        callback({ success: true });
+      }
+    }
+  });
+
+  // Security guard: Block any attempts to submit bids via raw socket events
+  socket.on("bid:place", (_, callback) => {
+    if (typeof callback === "function") {
+      callback({
+        success: false,
+        error: "Bids cannot be submitted via Socket.IO. Use the authoritative POST /api/listings/:id/bids REST endpoint.",
+      });
+    }
+  });
 
   socket.on("disconnect", () => {
     // Room membership cleaned up automatically by socket.io
   });
 });
 
-app.use(cors());
+app.use(cors({ origin: clientOrigins, credentials: true }));
 app.use(express.json());
 
 // Serve uploaded product images statically

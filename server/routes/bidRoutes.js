@@ -4,6 +4,7 @@ const Listing = require("../models/Listing");
 const Bid = require("../models/Bid");
 const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
 const notificationService = require("../services/notificationService");
+const socketService = require("../services/socketService");
 
 const router = express.Router();
 
@@ -190,21 +191,43 @@ const handlePlaceBid = async (req, res) => {
       console.error("Bid notification trigger error:", notifErr.message);
     }
 
-    // 10. Return populated response
+    // 10. Populate bid and broadcast live real-time update
     const populatedBid = await Bid.findById(createdBid._id).populate("bidder", "name");
+
+    const totalBidsCount = await Bid.countDocuments({ listing: listingId });
+    const nextMinBid = Number((updatedListing.currentPrice + minIncrement).toFixed(2));
+
+    const publicBidEntry = {
+      _id: populatedBid._id,
+      amount: populatedBid.amount,
+      createdAt: populatedBid.createdAt,
+      bidder: {
+        _id: populatedBid.bidder?._id || req.user.id,
+        id: populatedBid.bidder?._id || req.user.id,
+        name: populatedBid.bidder?.name || req.user.name || "Campus Buyer",
+      },
+    };
+
+    // Broadcast authoritative live update to all clients in auction room and marketplace
+    try {
+      socketService.broadcastBidUpdate(listingId, {
+        listingId,
+        currentPrice: updatedListing.currentPrice,
+        nextMinBid,
+        latestBid: publicBidEntry,
+        status: updatedListing.status,
+        auctionEndTime: updatedListing.auctionEndTime,
+        totalBidsCount,
+      });
+    } catch (broadcastErr) {
+      console.error("Live bid broadcast error:", broadcastErr.message);
+    }
 
     return res.status(201).json({
       message: "Bid placed successfully!",
       currentPrice: updatedListing.currentPrice,
-      bid: {
-        _id: populatedBid._id,
-        amount: populatedBid.amount,
-        createdAt: populatedBid.createdAt,
-        bidder: {
-          id: populatedBid.bidder?._id,
-          name: populatedBid.bidder?.name || "Campus Buyer",
-        },
-      },
+      nextMinBid,
+      bid: publicBidEntry,
     });
   } catch (error) {
     if (session) {

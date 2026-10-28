@@ -2,6 +2,7 @@ const Listing = require("../models/Listing");
 const Bid = require("../models/Bid");
 const Transaction = require("../models/Transaction");
 const notificationService = require("./notificationService");
+const socketService = require("./socketService");
 
 /**
  * Idempotently closes a single expired listing.
@@ -79,8 +80,26 @@ async function closeExpiredAuction(listingId) {
       .populate("seller", "name email role")
       .populate("winner", "name email role"));
 
-  // If this exact invocation performed the closure, dispatch notifications
+  // If this exact invocation performed the closure, dispatch notifications and broadcast live status update
   if (closedListing) {
+    try {
+      socketService.broadcastStatusUpdate(listingId.toString(), {
+        listingId: closedListing._id.toString(),
+        status: closedListing.status,
+        outcome: closedListing.outcome,
+        winner: closedListing.winner
+          ? {
+              _id: closedListing.winner._id || closedListing.winner,
+              name: closedListing.winner.name || "Winning Bidder",
+            }
+          : null,
+        finalPrice: closedListing.finalPrice,
+        completionTime: closedListing.completionTime,
+      });
+    } catch (broadcastErr) {
+      console.error("Auction status broadcast error:", broadcastErr.message);
+    }
+
     try {
       if (closedListing.outcome === "sold" && closedListing.winner) {
         const winnerId = closedListing.winner._id || closedListing.winner;
