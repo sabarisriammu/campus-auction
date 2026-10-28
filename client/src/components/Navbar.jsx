@@ -43,6 +43,15 @@ export default function Navbar({
             Browse Auctions
           </button>
 
+          {user && (
+            <button
+              className={`nav-link ${activeTab === "transactions" ? "active" : ""}`}
+              onClick={() => setActiveTab("transactions")}
+            >
+              🤝 My Handover
+            </button>
+          )}
+
           <button
             className="btn btn-primary btn-create"
             onClick={onOpenCreate}

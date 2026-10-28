@@ -5,6 +5,7 @@ const mongoose = require("mongoose");
 const authRoutes = require("./routes/authRoutes");
 const listingRoutes = require("./routes/listingRoutes");
 const bidRoutes = require("./routes/bidRoutes");
+const transactionRoutes = require("./routes/transactionRoutes");
 const { processExpiredAuctions } = require("./services/auctionService");
 require("dotenv").config();
 
@@ -20,6 +21,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/listings", listingRoutes);
 app.use("/api/listings", bidRoutes);
 app.use("/api/bids", bidRoutes);
+app.use("/api/transactions", transactionRoutes);
 
 app.get("/", (req, res) => {
   res.json({

@@ -1,5 +1,6 @@
 const Listing = require("../models/Listing");
 const Bid = require("../models/Bid");
+const Transaction = require("../models/Transaction");
 
 /**
  * Idempotently closes a single expired listing.
@@ -71,12 +72,34 @@ async function closeExpiredAuction(listingId) {
     .populate("seller", "name email role")
     .populate("winner", "name email role");
 
-  return (
+  const finalListing =
     closedListing ||
     (await Listing.findById(listingId)
       .populate("seller", "name email role")
-      .populate("winner", "name email role"))
-  );
+      .populate("winner", "name email role"));
+
+  // If the auction resulted in a sale, initialize the Handover Transaction record
+  if (finalListing && finalListing.status === "completed" && finalListing.outcome === "sold" && finalListing.winner) {
+    try {
+      await Transaction.findOneAndUpdate(
+        { listing: finalListing._id },
+        {
+          $setOnInsert: {
+            listing: finalListing._id,
+            seller: finalListing.seller._id || finalListing.seller,
+            buyer: finalListing.winner._id || finalListing.winner,
+            finalPrice: finalListing.finalPrice || finalListing.currentPrice,
+            status: "PENDING",
+          },
+        },
+        { upsert: true, new: true }
+      );
+    } catch (txErr) {
+      // Transaction already exists or concurrent insert
+    }
+  }
+
+  return finalListing;
 }
 
 /**

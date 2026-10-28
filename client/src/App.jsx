@@ -5,6 +5,7 @@ import ListingDetailsModal from "./components/ListingDetailsModal";
 import CreateListingModal from "./components/CreateListingModal";
 import EditListingModal from "./components/EditListingModal";
 import AuthModal from "./components/AuthModal";
+import TransactionsView from "./components/TransactionsView";
 import { api } from "./services/api";
 
 export default function App() {
@@ -196,19 +197,28 @@ export default function App() {
 
       {/* Main Content Body */}
       <main className="main-content">
-        <ListingsView
-          listings={listings}
-          loading={loading}
-          error={error}
-          searchQuery={searchQuery}
-          setSearchQuery={setSearchQuery}
-          selectedCategory={selectedCategory}
-          setSelectedCategory={setSelectedCategory}
-          onSelectListing={handleSelectListing}
-          onRefresh={loadListings}
-          user={user}
-          onOpenCreate={() => setIsCreateOpen(true)}
-        />
+        {activeTab === "transactions" ? (
+          <TransactionsView
+            user={user}
+            token={token}
+            onSwitchToBrowse={() => setActiveTab("browse")}
+            showToast={showToast}
+          />
+        ) : (
+          <ListingsView
+            listings={listings}
+            loading={loading}
+            error={error}
+            searchQuery={searchQuery}
+            setSearchQuery={setSearchQuery}
+            selectedCategory={selectedCategory}
+            setSelectedCategory={setSelectedCategory}
+            onSelectListing={handleSelectListing}
+            onRefresh={loadListings}
+            user={user}
+            onOpenCreate={() => setIsCreateOpen(true)}
+          />
+        )}
       </main>
 
       {/* Footer */}
@@ -230,6 +240,10 @@ export default function App() {
           onEdit={(item) => setEditingListing(item)}
           onCancel={handleCancelListing}
           isCancelling={isCancelling}
+          onOpenTransactions={() => {
+            setSelectedListing(null);
+            setActiveTab("transactions");
+          }}
           onBidSuccess={(listingId, newPrice) => {
             setSelectedListing((prev) => (prev ? { ...prev, currentPrice: newPrice } : null));
             setListings((prev) =>

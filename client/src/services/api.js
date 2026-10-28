@@ -135,4 +135,71 @@ export const api = {
     const response = await fetch(`${API_BASE_URL}/listings/${listingId}/bids`);
     return handleResponse(response);
   },
+
+  // Handover & Transaction endpoints (Module 7)
+  async getTransactions(token, status = "") {
+    const params = new URLSearchParams();
+    if (status) params.append("status", status);
+    const url = `${API_BASE_URL}/transactions${params.toString() ? `?${params.toString()}` : ""}`;
+    const response = await fetch(url, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async getTransactionById(id, token) {
+    const response = await fetch(`${API_BASE_URL}/transactions/${id}`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async getTransactionByListing(listingId, token) {
+    const response = await fetch(`${API_BASE_URL}/transactions/listing/${listingId}`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async startHandover(id, details, token) {
+    const response = await fetch(`${API_BASE_URL}/transactions/${id}/start`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify(details),
+    });
+    return handleResponse(response);
+  },
+
+  async confirmSellerHandover(id, token) {
+    const response = await fetch(`${API_BASE_URL}/transactions/${id}/confirm-handover`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async confirmBuyerReceipt(id, token) {
+    const response = await fetch(`${API_BASE_URL}/transactions/${id}/confirm-receipt`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async reportDispute(id, reason, token) {
+    const response = await fetch(`${API_BASE_URL}/transactions/${id}/dispute`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ reason }),
+    });
+    return handleResponse(response);
+  },
+
+  async resolveDispute(id, token) {
+    const response = await fetch(`${API_BASE_URL}/transactions/${id}/resolve`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
 };

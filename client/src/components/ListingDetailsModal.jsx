@@ -11,6 +11,7 @@ export default function ListingDetailsModal({
   isCancelling,
   onBidSuccess,
   onOpenAuth,
+  onOpenTransactions,
 }) {
   const [showConfirmCancel, setShowConfirmCancel] = useState(false);
   const [bids, setBids] = useState([]);
@@ -191,13 +192,25 @@ export default function ListingDetailsModal({
           {isSold && (
             <div className="alert alert-success mb-3 outcome-banner">
               <span className="outcome-icon">🏆</span>
-              <div>
+              <div style={{ flex: 1 }}>
                 <strong>Auction Completed — Sold!</strong>
                 <p className="outcome-desc">
                   Won by <strong>{winner?.name || "Winning Bidder"}</strong> for{" "}
                   <strong>${Number(finalPrice || currentPrice).toFixed(2)}</strong> on{" "}
                   {formattedCompletionDate}.
                 </p>
+                {user &&
+                  (user.id === (seller?._id || seller) ||
+                    user.id === (winner?._id || winner) ||
+                    user.role === "admin") &&
+                  onOpenTransactions && (
+                    <button
+                      className="btn btn-primary btn-sm mt-2"
+                      onClick={onOpenTransactions}
+                    >
+                      🤝 View Handover & Confirmations
+                    </button>
+                  )}
               </div>
             </div>
           )}
