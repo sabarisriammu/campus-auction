@@ -52,6 +52,29 @@ export default function ListingDetailsModal({
   );
   const [socketStatus, setSocketStatus] = useState("connecting");
   const [priceFlash, setPriceFlash] = useState(false);
+  const [proxyData, setProxyData] = useState(null);
+  const [proxyMaxAmount, setProxyMaxAmount] = useState("");
+  const [submittingProxy, setSubmittingProxy] = useState(false);
+  const [disablingProxy, setDisablingProxy] = useState(false);
+  const [proxyError, setProxyError] = useState("");
+  const [proxySuccess, setProxySuccess] = useState("");
+
+  const fetchProxy = useCallback(async () => {
+    if (!currentListing?._id || !token || !user || user.role !== "buyer") return;
+    try {
+      const data = await api.getProxyBid(currentListing._id, token);
+      if (data?.proxy) {
+        setProxyData(data.proxy);
+        if (data.proxy.maxAmount) {
+          setProxyMaxAmount(data.proxy.maxAmount.toString());
+        }
+      } else {
+        setProxyData(null);
+      }
+    } catch (err) {
+      // Ignore
+    }
+  }, [currentListing?._id, token, user]);
 
   const fetchBids = useCallback(async () => {
     if (!currentListing?._id) return;
@@ -86,7 +109,8 @@ export default function ListingDetailsModal({
 
   useEffect(() => {
     fetchBids();
-  }, [fetchBids]);
+    fetchProxy();
+  }, [fetchBids, fetchProxy]);
 
   // Real-time Socket.IO Live Bidding Room Subscription
   useEffect(() => {
@@ -104,6 +128,7 @@ export default function ListingDetailsModal({
       // Authoritative resynchronization on reconnect
       fetchBids();
       refreshListing();
+      fetchProxy();
     };
 
     const handleDisconnect = () => setSocketStatus("disconnected");
@@ -134,6 +159,8 @@ export default function ListingDetailsModal({
           return [payload.latestBid, ...prev];
         });
       }
+
+      fetchProxy();
 
       if (onBidSuccess) {
         onBidSuccess(listingId, payload.currentPrice);
@@ -311,6 +338,68 @@ export default function ListingDetailsModal({
     const calculated = nextMinBid + increment;
     setBidAmount(calculated.toFixed(2));
     setBidError("");
+  };
+
+  const isCurrentLeader = Boolean(
+    user &&
+    bids.length > 0 &&
+    (bids[0].bidder?.id === user.id || bids[0].bidder?._id === user.id)
+  );
+
+  const handleSetProxy = async (e) => {
+    e.preventDefault();
+    setProxyError("");
+    setProxySuccess("");
+
+    const val = Number(proxyMaxAmount);
+    if (isNaN(val) || val <= 0) {
+      setProxyError("Please enter a valid positive maximum amount.");
+      return;
+    }
+
+    const minRequired = isCurrentLeader
+      ? Number(currentPrice)
+      : Number(nextMinBid);
+
+    if (val < minRequired) {
+      setProxyError(
+        isCurrentLeader
+          ? `Your maximum limit cannot be less than your current winning bid of ${formatCurrency(minRequired)}.`
+          : `Maximum amount must be at least ${formatCurrency(minRequired)}.`
+      );
+      return;
+    }
+
+    setSubmittingProxy(true);
+    try {
+      const res = await api.setProxyBid(currentListing._id, val, token);
+      setProxyData(res.proxy);
+      setProxySuccess(`🎯 Automatic bidding active up to ${formatCurrency(val)}!`);
+      fetchBids();
+      refreshListing();
+      if (onBidSuccess) {
+        onBidSuccess(currentListing._id, res.currentPrice || currentPrice);
+      }
+    } catch (err) {
+      setProxyError(err.message || "Failed to configure automatic bidding.");
+    } finally {
+      setSubmittingProxy(false);
+    }
+  };
+
+  const handleDisableProxy = async () => {
+    setProxyError("");
+    setProxySuccess("");
+    setDisablingProxy(true);
+    try {
+      const res = await api.disableProxyBid(currentListing._id, token);
+      setProxyData(res.proxy);
+      setProxySuccess("Automatic bidding disabled. Previous bids remain active.");
+    } catch (err) {
+      setProxyError(err.message || "Failed to disable automatic bidding.");
+    } finally {
+      setDisablingProxy(false);
+    }
   };
 
   return (
@@ -749,6 +838,108 @@ export default function ListingDetailsModal({
                         )}
                       </button>
                     </form>
+
+                    {/* Automatic Bidding (Proxy) Section */}
+                    <div className="proxy-bidding-card">
+                      <div className="proxy-card-header">
+                        <div className="proxy-header-title">
+                          <ShieldCheckIcon size={16} />
+                          <span>Automatic Bidding (Proxy)</span>
+                        </div>
+                        {proxyData?.isActive && (
+                          <span className="proxy-active-badge">
+                            Active (Max {formatCurrency(proxyData.maxAmount)})
+                          </span>
+                        )}
+                      </div>
+
+                      <p className="proxy-card-desc">
+                        Set your maximum willing price. Campus Auction automatically submits minimum incremental bids to keep you ahead, up to your limit. Your ceiling remains 100% private.
+                      </p>
+
+                      {/* Live proxy status indicator */}
+                      {proxyData?.isActive && (
+                        <div className="proxy-status-banner">
+                          {isCurrentLeader ? (
+                            <div className="proxy-status-leading">
+                              <TrophyIcon size={15} />
+                              <span>You are currently the leading bidder!</span>
+                            </div>
+                          ) : currentPrice >= proxyData.maxAmount ? (
+                            <div className="proxy-status-exhausted">
+                              <AlertTriangleIcon size={15} />
+                              <span>Limit reached ({formatCurrency(proxyData.maxAmount)}). Increase to resume automatic bidding.</span>
+                            </div>
+                          ) : (
+                            <div className="proxy-status-active">
+                              <RotateCcwIcon size={15} />
+                              <span>Proxy is ready to counter competing bids up to {formatCurrency(proxyData.maxAmount)}.</span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+
+                      {proxyError && (
+                        <div className="alert alert-danger mb-2 text-sm">{proxyError}</div>
+                      )}
+                      {proxySuccess && (
+                        <div className="alert alert-success mb-2 text-sm">{proxySuccess}</div>
+                      )}
+
+                      <form onSubmit={handleSetProxy} className="proxy-form mt-2">
+                        <div className="form-group mb-2">
+                          <label className="form-label text-xs font-semibold text-muted">
+                            {proxyData?.isActive ? "Update Maximum Limit" : "Your Maximum Amount (₹)"}
+                          </label>
+                          <div className="bid-input-wrapper">
+                            <span className="bid-currency-symbol">₹</span>
+                            <input
+                              type="number"
+                              step="0.01"
+                              min={isCurrentLeader ? currentPrice : nextMinBid}
+                              placeholder={(isCurrentLeader ? currentPrice : nextMinBid).toFixed(2)}
+                              className="form-control bid-input font-mono"
+                              value={proxyMaxAmount}
+                              onChange={(e) => {
+                                setProxyMaxAmount(e.target.value);
+                                if (proxyError) setProxyError("");
+                              }}
+                              required
+                            />
+                          </div>
+                          <span className="bid-hint">
+                            {isCurrentLeader
+                              ? `Must be at least your current winning bid of ${formatCurrency(currentPrice)}`
+                              : `Must be at least ${formatCurrency(nextMinBid)}`}
+                          </span>
+                        </div>
+
+                        <div className="proxy-actions-row">
+                          <button
+                            type="submit"
+                            className="btn btn-outline-primary btn-sm flex-1"
+                            disabled={submittingProxy}
+                          >
+                            {submittingProxy
+                              ? "Saving..."
+                              : proxyData?.isActive
+                              ? "Update Limit"
+                              : "Enable Automatic Bidding"}
+                          </button>
+
+                          {proxyData?.isActive && (
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-sm"
+                              onClick={handleDisableProxy}
+                              disabled={disablingProxy}
+                            >
+                              {disablingProxy ? "Disabling..." : "Disable Proxy"}
+                            </button>
+                          )}
+                        </div>
+                      </form>
+                    </div>
                   </div>
                 )}
 

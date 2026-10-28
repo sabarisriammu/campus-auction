@@ -19,6 +19,9 @@ const NOTIFICATION_TYPES = [
   "SECOND_CHANCE_DECLINED",
   "AUCTION_RELISTED",
   "AUCTION_REMINDER",
+  "PROXY_BID_PLACED",
+  "PROXY_OUTBID",
+  "PROXY_LIMIT_REACHED",
 ];
 
 const notificationSchema = new mongoose.Schema(

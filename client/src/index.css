@@ -3966,3 +3966,90 @@ textarea:focus-visible {
   100% { transform: scale(1); }
 }
 
+/* Proxy / Automatic Bidding UI Styles */
+.proxy-bidding-card {
+  margin-top: 1.25rem;
+  padding: 1rem;
+  background: var(--slate-50, #f8fafc);
+  border: 1px solid var(--slate-200, #e2e8f0);
+  border-radius: 8px;
+}
+
+.proxy-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.proxy-header-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--slate-800, #1e293b);
+}
+
+.proxy-active-badge {
+  font-size: 0.7rem;
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  background: var(--success-100, #d1fae5);
+  color: var(--success-700, #047857);
+  font-weight: 600;
+}
+
+.proxy-card-desc {
+  font-size: 0.75rem;
+  color: var(--slate-500, #64748b);
+  line-height: 1.4;
+  margin-bottom: 0.75rem;
+}
+
+.proxy-status-banner {
+  margin-bottom: 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.35;
+}
+
+.proxy-status-leading {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--success-700, #047857);
+  background: var(--success-50, #ecfdf5);
+  border: 1px solid var(--success-100, #d1fae5);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.proxy-status-exhausted {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--accent-600, #b45309);
+  background: var(--accent-50, #fffbeb);
+  border: 1px solid var(--accent-100, #fef3c7);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.proxy-status-active {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: var(--primary-700, #162a52);
+  background: var(--primary-50, #eff6ff);
+  border: 1px solid var(--primary-100, #dbeafe);
+  padding: 0.5rem 0.75rem;
+  border-radius: 6px;
+}
+
+.proxy-actions-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+

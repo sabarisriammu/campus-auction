@@ -338,4 +338,29 @@ export const api = {
     });
     return handleResponse(response);
   },
+
+  // Proxy / Automatic Bidding endpoints
+  async getProxyBid(listingId, token) {
+    const response = await fetch(`${API_BASE_URL}/listings/${listingId}/proxy`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async setProxyBid(listingId, maxAmount, token) {
+    const response = await fetch(`${API_BASE_URL}/listings/${listingId}/proxy`, {
+      method: "POST",
+      headers: getAuthHeaders(token),
+      body: JSON.stringify({ maxAmount }),
+    });
+    return handleResponse(response);
+  },
+
+  async disableProxyBid(listingId, token) {
+    const response = await fetch(`${API_BASE_URL}/listings/${listingId}/proxy`, {
+      method: "DELETE",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
 };
