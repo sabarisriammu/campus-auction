@@ -74,6 +74,26 @@ export default function Navbar({
             <span>Live Marketplace</span>
           </button>
 
+          {user?.role === "seller" ? (
+            <button
+              className={`nav-link ${activeTab === "assistant" ? "active" : ""}`}
+              onClick={() => setActiveTab("assistant")}
+              title="Buyer Questions & Answers Inbox"
+            >
+              <span style={{ marginRight: "0.35rem" }}>💬</span>
+              <span>Buyer Q&A</span>
+            </button>
+          ) : (
+            <button
+              className={`nav-link ${activeTab === "assistant" ? "active" : ""}`}
+              onClick={() => setActiveTab("assistant")}
+              title="Campus AI Assistant: Smart Shopping, Q&A & Automatic Bidding"
+            >
+              <span className="nav-sparkle">✨</span>
+              <span>AI Assistant</span>
+            </button>
+          )}
+
           {user && (
             <button
               className={`nav-link ${activeTab === "transactions" ? "active" : ""}`}

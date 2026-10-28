@@ -41,6 +41,7 @@ async function createNotification({
   listing = null,
   bid = null,
   transaction = null,
+  question = null,
   deduplicate = false,
   threshold = null,
 }) {
@@ -72,6 +73,7 @@ async function createNotification({
       listing: listing || null,
       bid: bid || null,
       transaction: transaction || null,
+      question: question || null,
       threshold: threshold || null,
       isRead: false,
     });

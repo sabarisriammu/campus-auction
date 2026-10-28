@@ -14,6 +14,8 @@ const transactionRoutes = require("./routes/transactionRoutes");
 const notificationRoutes = require("./routes/notificationRoutes");
 const watchlistRoutes = require("./routes/watchlistRoutes");
 const secondChanceRoutes = require("./routes/secondChanceRoutes");
+const aiRoutes = require("./routes/aiRoutes");
+const questionRoutes = require("./routes/questionRoutes");
 const notificationService = require("./services/notificationService");
 const socketService = require("./services/socketService");
 const { processExpiredAuctions } = require("./services/auctionService");
@@ -162,6 +164,8 @@ app.use("/api/transactions", transactionRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/watchlist", watchlistRoutes);
 app.use("/api", secondChanceRoutes);
+app.use("/api/ai", aiRoutes);
+app.use("/api/questions", questionRoutes);
 
 app.get("/", (req, res) => {
   res.json({

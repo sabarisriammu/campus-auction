@@ -22,6 +22,8 @@ const NOTIFICATION_TYPES = [
   "PROXY_BID_PLACED",
   "PROXY_OUTBID",
   "PROXY_LIMIT_REACHED",
+  "NEW_QUESTION",
+  "QUESTION_ANSWERED",
 ];
 
 const notificationSchema = new mongoose.Schema(
@@ -67,6 +69,11 @@ const notificationSchema = new mongoose.Schema(
     transaction: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Transaction",
+      default: null,
+    },
+    question: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "ListingQuestion",
       default: null,
     },
     // Threshold identifier for auction reminders (e.g., "15m", "5m")

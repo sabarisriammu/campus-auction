@@ -78,7 +78,7 @@ export default function AssistantView({
   const [replyText, setReplyText] = useState("");
   const [submittingReply, setSubmittingReply] = useState(false);
 
-  const isSeller = user && (user.role === "seller" || user.role === "admin");
+  const isSeller = user && user.role === "seller";
 
   const loadQuestions = async () => {
     if (!token) return;
@@ -98,7 +98,7 @@ export default function AssistantView({
   };
 
   useEffect(() => {
-    if (activeSubTab === "qa" && token) {
+    if (token && (isSeller || activeSubTab === "qa")) {
       loadQuestions();
     }
   }, [activeSubTab, token, isSeller]);
@@ -226,6 +226,138 @@ export default function AssistantView({
     }
   };
 
+  // -------------------------------------------------------------
+  // SELLER INTERFACE: Dedicated Purely Manual Buyer Q&A Inbox
+  // Completely free of AI branding, AI drafts, or AI features.
+  // -------------------------------------------------------------
+  if (isSeller) {
+    return (
+      <div className="assistant-view-container">
+        <div className="card-box mb-4">
+          <div className="d-flex align-items-center justify-content-between mb-3">
+            <div>
+              <h2 className="pane-section-title text-xl mb-1">Buyer Questions & Answers Inbox</h2>
+              <p className="text-xs text-muted mb-0">
+                Direct questions from campus students regarding your active auction listings. Reply manually to help prospective buyers.
+              </p>
+            </div>
+            <button
+              type="button"
+              className="btn btn-outline-secondary btn-xs"
+              onClick={loadQuestions}
+            >
+              🔄 Refresh Inbox
+            </button>
+          </div>
+
+          {loadingQuestions ? (
+            <div className="p-4 text-center text-sm text-muted">Loading questions...</div>
+          ) : sellerInbox.length === 0 ? (
+            <div className="p-4 text-center text-sm text-muted bg-slate-50 rounded">
+              <PackageIcon size={32} className="text-muted mb-2 mx-auto" />
+              <p className="font-semibold mb-1">No incoming buyer questions yet</p>
+              <p className="text-xs text-muted mb-0">
+                When campus students ask questions about your listings, they will appear here for you to manually answer.
+              </p>
+            </div>
+          ) : (
+            <div className="qa-threads-list">
+              {sellerInbox.map((thread) => (
+                <div key={thread._id} className="qa-thread-card">
+                  <div className="qa-thread-header">
+                    <div>
+                      <span className="qa-item-title font-semibold text-sm">
+                        {thread.listing?.title || "Auction Item"}
+                      </span>
+                      <span className="text-xs text-muted ml-2">
+                        From: {thread.buyer?.name || "Campus Buyer"} • {new Date(thread.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <span className={`badge ${thread.status === "ANSWERED" ? "badge-success" : "badge-warning"}`}>
+                      {thread.status}
+                    </span>
+                  </div>
+
+                  <div className="qa-question-bubble mt-2">
+                    <strong className="text-xs text-primary">Buyer Asked:</strong>
+                    <p className="text-sm mb-0 mt-1">{thread.question}</p>
+                  </div>
+
+                  {thread.status === "ANSWERED" ? (
+                    <div className="qa-answer-bubble mt-2">
+                      <strong className="text-xs text-success">Your Confirmed Reply:</strong>
+                      <p className="text-sm mb-0 mt-1">{thread.answer}</p>
+                      <span className="text-xs text-muted">
+                        Answered on {new Date(thread.answeredAt).toLocaleString()}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="qa-reply-composer mt-3">
+                      {replyingToId === thread._id ? (
+                        <div className="composer-box">
+                          <div className="form-group mb-2">
+                            <label className="form-label text-xs font-semibold">
+                              Your Answer:
+                            </label>
+                            <textarea
+                              className="form-control text-sm"
+                              rows="3"
+                              placeholder="Type your answer to the buyer..."
+                              value={replyText}
+                              onChange={(e) => setReplyText(e.target.value)}
+                              disabled={submittingReply}
+                              maxLength={1000}
+                            />
+                          </div>
+
+                          <div className="d-flex gap-2">
+                            <button
+                              type="button"
+                              className="btn btn-primary btn-xs"
+                              onClick={() => handleSendReply(thread._id)}
+                              disabled={submittingReply || !replyText.trim()}
+                            >
+                              {submittingReply ? "Sending..." : "Reply"}
+                            </button>
+                            <button
+                              type="button"
+                              className="btn btn-outline-secondary btn-xs"
+                              onClick={() => {
+                                setReplyingToId(null);
+                                setReplyText("");
+                              }}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          type="button"
+                          className="btn btn-outline-primary btn-xs"
+                          onClick={() => {
+                            setReplyingToId(thread._id);
+                            setReplyText("");
+                          }}
+                        >
+                          ✍️ Reply to Buyer
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // -------------------------------------------------------------
+  // BUYER INTERFACE: Dedicated Campus AI Assistant
+  // Smart Shopping, Product Q&A, and Permission-Based Auto-Bidding
+  // -------------------------------------------------------------
   return (
     <div className="assistant-view-container">
       {/* Top Hero Banner */}
@@ -254,11 +386,6 @@ export default function AssistantView({
             onClick={() => setActiveSubTab("qa")}
           >
             <span>💬 Product Q&A</span>
-            {isSeller && sellerInbox.filter((q) => q.status === "PENDING").length > 0 && (
-              <span className="subtab-badge font-mono">
-                {sellerInbox.filter((q) => q.status === "PENDING").length}
-              </span>
-            )}
           </button>
           <button
             className={`subtab-pill ${activeSubTab === "bidding" ? "active" : ""}`}
@@ -513,123 +640,6 @@ export default function AssistantView({
       {/* ============================================================== */}
       {activeSubTab === "qa" && (
         <div className="assistant-tab-pane">
-          {/* SELLER QUESTIONS INBOX (Visible if Seller/Admin) */}
-          {isSeller && (
-            <div className="card-box mb-4">
-              <div className="d-flex align-items-center justify-content-between mb-3">
-                <div>
-                  <h3 className="pane-section-title">Seller Questions & Answers Inbox</h3>
-                  <p className="text-xs text-muted mb-0">
-                    Questions from campus students regarding your active auction listings.
-                  </p>
-                </div>
-                <button
-                  type="button"
-                  className="btn btn-outline-secondary btn-xs"
-                  onClick={loadQuestions}
-                >
-                  🔄 Refresh Inbox
-                </button>
-              </div>
-
-              {loadingQuestions ? (
-                <div className="p-3 text-center text-sm text-muted">Loading questions...</div>
-              ) : sellerInbox.length === 0 ? (
-                <div className="p-3 text-center text-sm text-muted bg-slate-50 rounded">
-                  No incoming questions for your listings yet.
-                </div>
-              ) : (
-                <div className="qa-threads-list">
-                  {sellerInbox.map((thread) => (
-                    <div key={thread._id} className="qa-thread-card">
-                      <div className="qa-thread-header">
-                        <div>
-                          <span className="qa-item-title font-semibold text-sm">
-                            {thread.listing?.title || "Auction Item"}
-                          </span>
-                          <span className="text-xs text-muted ml-2">
-                            From: {thread.buyer?.name || "Campus Buyer"} • {new Date(thread.createdAt).toLocaleString()}
-                          </span>
-                        </div>
-                        <span className={`badge ${thread.status === "ANSWERED" ? "badge-success" : "badge-warning"}`}>
-                          {thread.status}
-                        </span>
-                      </div>
-
-                      <div className="qa-question-bubble mt-2">
-                        <strong className="text-xs text-primary">Buyer Asked:</strong>
-                        <p className="text-sm mb-0 mt-1">{thread.question}</p>
-                      </div>
-
-                      {thread.status === "ANSWERED" ? (
-                        <div className="qa-answer-bubble mt-2">
-                          <strong className="text-xs text-success">Your Confirmed Reply:</strong>
-                          <p className="text-sm mb-0 mt-1">{thread.answer}</p>
-                          <span className="text-xs text-muted">
-                            Answered on {new Date(thread.answeredAt).toLocaleString()}
-                          </span>
-                        </div>
-                      ) : (
-                        <div className="qa-reply-composer mt-3">
-                          {replyingToId === thread._id ? (
-                            <div className="composer-box">
-                              <div className="form-group mb-2">
-                                <label className="form-label text-xs font-semibold">
-                                  Your Answer:
-                                </label>
-                                <textarea
-                                  className="form-control text-sm"
-                                  rows="3"
-                                  placeholder="Type your answer to the buyer..."
-                                  value={replyText}
-                                  onChange={(e) => setReplyText(e.target.value)}
-                                  disabled={submittingReply}
-                                  maxLength={1000}
-                                />
-                              </div>
-
-                              <div className="d-flex gap-2">
-                                <button
-                                  type="button"
-                                  className="btn btn-primary btn-xs"
-                                  onClick={() => handleSendReply(thread._id)}
-                                  disabled={submittingReply || !replyText.trim()}
-                                >
-                                  {submittingReply ? "Sending..." : "Reply"}
-                                </button>
-                                <button
-                                  type="button"
-                                  className="btn btn-outline-secondary btn-xs"
-                                  onClick={() => {
-                                    setReplyingToId(null);
-                                    setReplyText("");
-                                  }}
-                                >
-                                  Cancel
-                                </button>
-                              </div>
-                            </div>
-                          ) : (
-                            <button
-                              type="button"
-                              className="btn btn-outline-primary btn-xs"
-                              onClick={() => {
-                                setReplyingToId(thread._id);
-                                setReplyText("");
-                              }}
-                            >
-                              ✍️ Reply to Buyer
-                            </button>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
           {/* BUYER QUESTION SUBMISSION & HISTORY */}
           <div className="card-box mb-4">
             <h3 className="pane-section-title">Ask the Seller a Question</h3>

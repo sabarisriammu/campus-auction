@@ -7,6 +7,7 @@ import EditListingModal from "./components/EditListingModal";
 import AuthModal from "./components/AuthModal";
 import TransactionsView from "./components/TransactionsView";
 import WatchlistView from "./components/WatchlistView";
+import AssistantView from "./components/AssistantView";
 import { api } from "./services/api";
 import { getSocket, disconnectSocket } from "./services/socket";
 
@@ -393,6 +394,18 @@ export default function App() {
             onSwitchToBrowse={() => setActiveTab("browse")}
             showToast={showToast}
             onItemRemoved={handleWatchlistRemove}
+          />
+        ) : activeTab === "assistant" ? (
+          <AssistantView
+            user={user}
+            token={token}
+            onSelectListing={handleSelectListing}
+            onOpenAuth={(mode) => {
+              setAuthMode(mode || "login");
+              setIsAuthOpen(true);
+            }}
+            showToast={showToast}
+            allListings={listings}
           />
         ) : (
           <ListingsView

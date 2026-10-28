@@ -72,9 +72,22 @@ function broadcastStatusUpdate(listingId, payload) {
   ioInstance.emit("listing:status-updated", payload);
 }
 
+/**
+ * Emit a private event to a specific user's secure room
+ * @param {string|mongoose.Types.ObjectId} userId
+ * @param {string} event
+ * @param {object} payload
+ */
+function emitToUser(userId, event, payload) {
+  if (!ioInstance || !userId) return;
+  const userRoom = `user:${userId.toString()}`;
+  ioInstance.to(userRoom).emit(event, payload);
+}
+
 module.exports = {
   setIo,
   getIo,
   broadcastBidUpdate,
   broadcastStatusUpdate,
+  emitToUser,
 };
