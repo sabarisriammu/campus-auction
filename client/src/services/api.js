@@ -202,4 +202,41 @@ export const api = {
     });
     return handleResponse(response);
   },
+
+  // Notification endpoints (Module 8)
+  async getNotifications(token, { page = 1, limit = 20, unreadOnly = false } = {}) {
+    const params = new URLSearchParams();
+    if (page) params.append("page", page);
+    if (limit) params.append("limit", limit);
+    if (unreadOnly) params.append("unreadOnly", "true");
+
+    const url = `${API_BASE_URL}/notifications${params.toString() ? `?${params.toString()}` : ""}`;
+    const response = await fetch(url, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async getUnreadNotificationCount(token) {
+    const response = await fetch(`${API_BASE_URL}/notifications/unread-count`, {
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async markNotificationAsRead(id, token) {
+    const response = await fetch(`${API_BASE_URL}/notifications/${id}/read`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
+
+  async markAllNotificationsAsRead(token) {
+    const response = await fetch(`${API_BASE_URL}/notifications/read-all`, {
+      method: "PATCH",
+      headers: getAuthHeaders(token),
+    });
+    return handleResponse(response);
+  },
 };

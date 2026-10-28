@@ -1,12 +1,21 @@
 import React from "react";
+import NotificationDropdown from "./NotificationDropdown";
 
 export default function Navbar({
   user,
+  token,
   onOpenAuth,
   onLogout,
   onOpenCreate,
   activeTab,
   setActiveTab,
+  unreadCount,
+  setUnreadCount,
+  notifications,
+  setNotifications,
+  loadingNotifications,
+  fetchNotifications,
+  onNavigate,
 }) {
   const getRoleBadge = (role) => {
     switch (role) {
@@ -63,21 +72,33 @@ export default function Navbar({
 
         <div className="navbar-user">
           {user ? (
-            <div className="user-profile">
-              <div className="user-badge" title={`${user.email} (${user.role || "buyer"})`}>
-                <span className="user-avatar">
-                  {user.name ? user.name.charAt(0).toUpperCase() : "U"}
-                </span>
-                <span className="user-name">{user.name}</span>
-                {getRoleBadge(user.role)}
+            <div className="user-profile-wrapper">
+              <NotificationDropdown
+                token={token}
+                unreadCount={unreadCount}
+                setUnreadCount={setUnreadCount}
+                notifications={notifications}
+                setNotifications={setNotifications}
+                loading={loadingNotifications}
+                fetchNotifications={fetchNotifications}
+                onNavigate={onNavigate}
+              />
+              <div className="user-profile">
+                <div className="user-badge" title={`${user.email} (${user.role || "buyer"})`}>
+                  <span className="user-avatar">
+                    {user.name ? user.name.charAt(0).toUpperCase() : "U"}
+                  </span>
+                  <span className="user-name">{user.name}</span>
+                  {getRoleBadge(user.role)}
+                </div>
+                <button
+                  className="btn btn-outline btn-sm"
+                  onClick={onLogout}
+                  title="Sign out of your account"
+                >
+                  Sign Out
+                </button>
               </div>
-              <button
-                className="btn btn-outline btn-sm"
-                onClick={onLogout}
-                title="Sign out of your account"
-              >
-                Sign Out
-              </button>
             </div>
           ) : (
             <div className="auth-buttons">

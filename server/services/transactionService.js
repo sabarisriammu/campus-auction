@@ -1,6 +1,7 @@
 const mongoose = require("mongoose");
 const Transaction = require("../models/Transaction");
 const Listing = require("../models/Listing");
+const notificationService = require("./notificationService");
 
 /**
  * Ensures a Transaction record exists for a completed, sold listing.
@@ -162,6 +163,25 @@ async function startHandover(transactionId, user, { handoverLocation, handoverNo
   }
 
   await transaction.save();
+
+  // Notify counterparty about coordination update
+  try {
+    const sellerId = transaction.seller?._id?.toString() || transaction.seller?.toString();
+    const buyerId = transaction.buyer?._id?.toString() || transaction.buyer?.toString();
+    const otherPartyId = user.id === sellerId ? buyerId : sellerId;
+
+    await notificationService.createNotification({
+      recipient: otherPartyId,
+      type: "HANDOVER_STARTED",
+      title: "Handover Coordination",
+      message: `Meetup coordination details updated for "${transaction.listing?.title || "your item"}".`,
+      listing: transaction.listing?._id || transaction.listing,
+      transaction: transaction._id,
+    });
+  } catch (notifErr) {
+    console.error("Handover coordination notification error:", notifErr.message);
+  }
+
   return transaction;
 }
 
@@ -205,12 +225,54 @@ async function confirmSellerHandover(transactionId, user) {
   }
 
   // Complete if and only if both parties confirmed
-  if (transaction.buyerConfirmed) {
+  const wasCompleted = transaction.buyerConfirmed;
+  if (wasCompleted) {
     transaction.status = "COMPLETED";
     transaction.completedAt = new Date();
   }
 
   await transaction.save();
+
+  try {
+    const buyerId = transaction.buyer?._id?.toString() || transaction.buyer?.toString();
+    const listingTitle = transaction.listing?.title || "your item";
+    const listingId = transaction.listing?._id || transaction.listing;
+
+    if (transaction.status === "COMPLETED") {
+      await Promise.all([
+        notificationService.createNotification({
+          recipient: sellerId,
+          type: "HANDOVER_COMPLETED",
+          title: "Handover Completed!",
+          message: `Item handover confirmed and completed for "${listingTitle}".`,
+          listing: listingId,
+          transaction: transaction._id,
+          deduplicate: true,
+        }),
+        notificationService.createNotification({
+          recipient: buyerId,
+          type: "HANDOVER_COMPLETED",
+          title: "Handover Completed!",
+          message: `Item handover confirmed and completed for "${listingTitle}".`,
+          listing: listingId,
+          transaction: transaction._id,
+          deduplicate: true,
+        }),
+      ]);
+    } else {
+      await notificationService.createNotification({
+        recipient: buyerId,
+        type: "HANDOVER_SELLER_CONFIRMED",
+        title: "Item Handed Over by Seller",
+        message: `The seller confirmed delivery of "${listingTitle}". Please confirm receipt once you inspect the item.`,
+        listing: listingId,
+        transaction: transaction._id,
+      });
+    }
+  } catch (notifErr) {
+    console.error("Seller confirmation notification error:", notifErr.message);
+  }
+
   return transaction;
 }
 
@@ -254,12 +316,54 @@ async function confirmBuyerReceipt(transactionId, user) {
   }
 
   // Complete if and only if both parties confirmed
-  if (transaction.sellerConfirmed) {
+  const wasCompleted = transaction.sellerConfirmed;
+  if (wasCompleted) {
     transaction.status = "COMPLETED";
     transaction.completedAt = new Date();
   }
 
   await transaction.save();
+
+  try {
+    const sellerId = transaction.seller?._id?.toString() || transaction.seller?.toString();
+    const listingTitle = transaction.listing?.title || "your item";
+    const listingId = transaction.listing?._id || transaction.listing;
+
+    if (transaction.status === "COMPLETED") {
+      await Promise.all([
+        notificationService.createNotification({
+          recipient: sellerId,
+          type: "HANDOVER_COMPLETED",
+          title: "Handover Completed!",
+          message: `Item handover confirmed and completed for "${listingTitle}".`,
+          listing: listingId,
+          transaction: transaction._id,
+          deduplicate: true,
+        }),
+        notificationService.createNotification({
+          recipient: buyerId,
+          type: "HANDOVER_COMPLETED",
+          title: "Handover Completed!",
+          message: `Item handover confirmed and completed for "${listingTitle}".`,
+          listing: listingId,
+          transaction: transaction._id,
+          deduplicate: true,
+        }),
+      ]);
+    } else {
+      await notificationService.createNotification({
+        recipient: sellerId,
+        type: "HANDOVER_BUYER_CONFIRMED",
+        title: "Buyer Confirmed Receipt",
+        message: `The winning buyer confirmed receipt of "${listingTitle}".`,
+        listing: listingId,
+        transaction: transaction._id,
+      });
+    }
+  } catch (notifErr) {
+    console.error("Buyer confirmation notification error:", notifErr.message);
+  }
+
   return transaction;
 }
 
@@ -291,6 +395,25 @@ async function reportDispute(transactionId, user, reason) {
   transaction.disputedAt = new Date();
 
   await transaction.save();
+
+  try {
+    const sellerId = transaction.seller?._id?.toString() || transaction.seller?.toString();
+    const buyerId = transaction.buyer?._id?.toString() || transaction.buyer?.toString();
+    const otherPartyId = user.id === sellerId ? buyerId : sellerId;
+    const listingTitle = transaction.listing?.title || "your item";
+
+    await notificationService.createNotification({
+      recipient: otherPartyId,
+      type: "HANDOVER_DISPUTED",
+      title: "Handover Issue Reported",
+      message: `A dispute was reported regarding "${listingTitle}": ${String(reason).trim().slice(0, 80)}`,
+      listing: transaction.listing?._id || transaction.listing,
+      transaction: transaction._id,
+    });
+  } catch (notifErr) {
+    console.error("Dispute report notification error:", notifErr.message);
+  }
+
   return await Transaction.findById(transaction._id)
     .populate("listing")
     .populate("seller", "name email role")
@@ -320,6 +443,25 @@ async function resolveDispute(transactionId, user) {
   transaction.disputedAt = null;
 
   await transaction.save();
+
+  try {
+    const sellerId = transaction.seller?._id?.toString() || transaction.seller?.toString();
+    const buyerId = transaction.buyer?._id?.toString() || transaction.buyer?.toString();
+    const otherPartyId = user.id === sellerId ? buyerId : sellerId;
+    const listingTitle = transaction.listing?.title || "your item";
+
+    await notificationService.createNotification({
+      recipient: otherPartyId,
+      type: "HANDOVER_RESOLVED",
+      title: "Handover Dispute Resolved",
+      message: `The dispute on "${listingTitle}" has been resolved. Handover coordination resumed.`,
+      listing: transaction.listing?._id || transaction.listing,
+      transaction: transaction._id,
+    });
+  } catch (notifErr) {
+    console.error("Dispute resolve notification error:", notifErr.message);
+  }
+
   return await Transaction.findById(transaction._id)
     .populate("listing")
     .populate("seller", "name email role")

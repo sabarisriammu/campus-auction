@@ -1,6 +1,7 @@
 const Listing = require("../models/Listing");
 const Bid = require("../models/Bid");
 const Transaction = require("../models/Transaction");
+const notificationService = require("./notificationService");
 
 /**
  * Idempotently closes a single expired listing.
@@ -77,6 +78,49 @@ async function closeExpiredAuction(listingId) {
     (await Listing.findById(listingId)
       .populate("seller", "name email role")
       .populate("winner", "name email role"));
+
+  // If this exact invocation performed the closure, dispatch notifications
+  if (closedListing) {
+    try {
+      if (closedListing.outcome === "sold" && closedListing.winner) {
+        const winnerId = closedListing.winner._id || closedListing.winner;
+        const sellerId = closedListing.seller._id || closedListing.seller;
+        const soldPrice = Number(closedListing.finalPrice || closedListing.currentPrice).toFixed(2);
+
+        // Notify winner
+        await notificationService.createNotification({
+          recipient: winnerId,
+          type: "AUCTION_WON",
+          title: "Auction Won!",
+          message: `Congratulations! You won the auction for "${closedListing.title}" with a winning bid of $${soldPrice}.`,
+          listing: closedListing._id,
+          deduplicate: true,
+        });
+
+        // Notify seller
+        await notificationService.createNotification({
+          recipient: sellerId,
+          type: "AUCTION_SOLD",
+          title: "Item Sold!",
+          message: `Your listing "${closedListing.title}" sold for $${soldPrice}.`,
+          listing: closedListing._id,
+          deduplicate: true,
+        });
+      } else if (closedListing.outcome === "unsold") {
+        const sellerId = closedListing.seller._id || closedListing.seller;
+        await notificationService.createNotification({
+          recipient: sellerId,
+          type: "AUCTION_UNSOLD",
+          title: "Auction Ended - Unsold",
+          message: `Your auction for "${closedListing.title}" ended without receiving any bids.`,
+          listing: closedListing._id,
+          deduplicate: true,
+        });
+      }
+    } catch (notifErr) {
+      console.error("Auction closure notification error:", notifErr.message);
+    }
+  }
 
   // If the auction resulted in a sale, initialize the Handover Transaction record
   if (finalListing && finalListing.status === "completed" && finalListing.outcome === "sold" && finalListing.winner) {

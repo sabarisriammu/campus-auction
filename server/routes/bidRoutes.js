@@ -3,6 +3,7 @@ const mongoose = require("mongoose");
 const Listing = require("../models/Listing");
 const Bid = require("../models/Bid");
 const { authenticate, authorizeRoles } = require("../middleware/authMiddleware");
+const notificationService = require("../services/notificationService");
 
 const router = express.Router();
 
@@ -111,6 +112,12 @@ const handlePlaceBid = async (req, res) => {
       }
     }
 
+    // Find the previous highest bid before applying the new bid
+    const previousHighestBid = await Bid.findOne({ listing: listingId }).sort({
+      amount: -1,
+      createdAt: -1,
+    });
+
     // 7. Atomic Conditional Update (Optimistic Concurrency Control)
     // Only update currentPrice if it STILL matches listing.currentPrice at this exact moment
     const updateQuery = Listing.findOneAndUpdate(
@@ -153,7 +160,37 @@ const handlePlaceBid = async (req, res) => {
       createdBid = await Bid.create(bidPayload);
     }
 
-    // 9. Return populated response
+    // 9. Asynchronously send notifications (safe: will not rollback or throw)
+    try {
+      // Notify seller of new bid
+      await notificationService.createNotification({
+        recipient: listing.seller,
+        type: "NEW_BID",
+        title: "New Bid Placed",
+        message: `A new bid of $${normalizedAmount.toFixed(2)} was placed on "${listing.title}".`,
+        listing: listing._id,
+        bid: createdBid._id,
+      });
+
+      // Notify previous highest bidder if outbid
+      if (
+        previousHighestBid &&
+        previousHighestBid.bidder.toString() !== req.user.id.toString()
+      ) {
+        await notificationService.createNotification({
+          recipient: previousHighestBid.bidder,
+          type: "OUTBID",
+          title: "You Have Been Outbid",
+          message: `You were outbid on "${listing.title}". The new highest bid is $${normalizedAmount.toFixed(2)}.`,
+          listing: listing._id,
+          bid: createdBid._id,
+        });
+      }
+    } catch (notifErr) {
+      console.error("Bid notification trigger error:", notifErr.message);
+    }
+
+    // 10. Return populated response
     const populatedBid = await Bid.findById(createdBid._id).populate("bidder", "name");
 
     return res.status(201).json({

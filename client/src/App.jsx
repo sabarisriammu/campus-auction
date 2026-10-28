@@ -7,6 +7,7 @@ import EditListingModal from "./components/EditListingModal";
 import AuthModal from "./components/AuthModal";
 import TransactionsView from "./components/TransactionsView";
 import { api } from "./services/api";
+import { getSocket, disconnectSocket } from "./services/socket";
 
 export default function App() {
   // Authentication State
@@ -37,6 +38,11 @@ export default function App() {
   const [authMode, setAuthMode] = useState("login");
   const [isCancelling, setIsCancelling] = useState(false);
 
+  // Notifications State (Module 8)
+  const [notifications, setNotifications] = useState([]);
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [loadingNotifications, setLoadingNotifications] = useState(false);
+
   // Toast Notification
   const [toast, setToast] = useState(null);
 
@@ -45,6 +51,79 @@ export default function App() {
     setTimeout(() => {
       setToast(null);
     }, 4000);
+  };
+
+  // Fetch Notifications from REST API
+  const fetchNotifications = useCallback(async () => {
+    if (!token) return;
+    setLoadingNotifications(true);
+    try {
+      const data = await api.getNotifications(token, { limit: 25 });
+      setNotifications(data.notifications || []);
+      setUnreadCount(data.unreadCount || 0);
+    } catch (err) {
+      console.warn("Failed to fetch notifications:", err.message);
+    } finally {
+      setLoadingNotifications(false);
+    }
+  }, [token]);
+
+  // Fetch Unread Notification Count
+  const fetchUnreadCount = useCallback(async () => {
+    if (!token) return;
+    try {
+      const data = await api.getUnreadNotificationCount(token);
+      setUnreadCount(data.count || 0);
+    } catch (err) {
+      console.warn("Failed to fetch unread count:", err.message);
+    }
+  }, [token]);
+
+  // Real-Time Socket.IO Notification Subscriptions
+  useEffect(() => {
+    if (!token || !user) {
+      disconnectSocket();
+      setNotifications([]);
+      setUnreadCount(0);
+      return;
+    }
+
+    // Initial load
+    fetchNotifications();
+    fetchUnreadCount();
+
+    // Establish WebSocket connection
+    const socket = getSocket(token);
+    if (!socket) return;
+
+    const handleNewNotification = (newNotif) => {
+      setNotifications((prev) => [newNotif, ...prev.filter((n) => n._id !== newNotif._id)]);
+      setUnreadCount((prev) => prev + 1);
+      showToast(`📢 ${newNotif.title}: ${newNotif.message}`, "info");
+    };
+
+    const handleUnreadCountUpdate = (data) => {
+      if (typeof data?.count === "number") {
+        setUnreadCount(data.count);
+      }
+    };
+
+    socket.on("notification:new", handleNewNotification);
+    socket.on("notification:unread-count", handleUnreadCountUpdate);
+
+    return () => {
+      socket.off("notification:new", handleNewNotification);
+      socket.off("notification:unread-count", handleUnreadCountUpdate);
+    };
+  }, [token, user, fetchNotifications, fetchUnreadCount]);
+
+  // Notification Navigation Handler
+  const handleNotificationNavigate = (destination, targetId) => {
+    if (destination === "transactions") {
+      setActiveTab("transactions");
+    } else if (destination === "listing" && targetId) {
+      handleSelectListing(targetId);
+    }
   };
 
   // Auth Handlers
@@ -73,8 +152,11 @@ export default function App() {
   };
 
   const handleLogout = () => {
+    disconnectSocket();
     setToken(null);
     setUser(null);
+    setNotifications([]);
+    setUnreadCount(0);
     localStorage.removeItem("campus_token");
     localStorage.removeItem("campus_user");
     showToast("You have been signed out.", "info");
@@ -185,6 +267,7 @@ export default function App() {
       {/* Main Navigation */}
       <Navbar
         user={user}
+        token={token}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenCreate={() => setIsCreateOpen(true)}
@@ -193,6 +276,13 @@ export default function App() {
           setIsAuthOpen(true);
         }}
         onLogout={handleLogout}
+        unreadCount={unreadCount}
+        setUnreadCount={setUnreadCount}
+        notifications={notifications}
+        setNotifications={setNotifications}
+        loadingNotifications={loadingNotifications}
+        fetchNotifications={fetchNotifications}
+        onNavigate={handleNotificationNavigate}
       />
 
       {/* Main Content Body */}
